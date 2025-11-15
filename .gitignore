@@ -6,6 +6,7 @@
 *.ko
 *.obj
 *.elf
+*.bin
 
 # Linker output
 *.ilk
@@ -53,3 +54,12 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+/build
+/Debug
+/.vscode
+/__pycache__
+project.*
+*.user
+*.dblite
+/rt-thread/tools/__pycache__
