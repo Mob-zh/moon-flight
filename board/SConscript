@@ -1,0 +1,21 @@
+import os
+import rtconfig
+from building import *
+
+cwd = GetCurrentDir()
+
+# add general drivers
+src = Split('''
+src/board.c
+src/at32_msp.c
+WorkBench_Config/project/src/at32f435_437_wk_config.c
+WorkBench_Config/project/src/wk_system.c
+''')
+
+path = [cwd]
+path += [cwd + '/inc']
+path += [cwd + '/WorkBench_Config/project/inc']
+
+CPPDEFINES = ['AT32F435VGT7']
+group = DefineGroup('Drivers', src, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+Return('group')
