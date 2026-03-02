@@ -13,7 +13,7 @@
 void system_clock_config(void)
 {
   /* enable pwc periph clock */
-  crm_periph_clock_enable(CRM_PWC_PERIPH_CLOCK, TRUE);
+  wk_system_clock_config();
 
   /* config ldo voltage */
   pwc_ldo_output_voltage_set(PWC_LDO_OUTPUT_1V3);
@@ -32,7 +32,7 @@ void system_clock_config(void)
   }
 
   /* config pll clock resource */
-  crm_pll_config(CRM_PLL_SOURCE_HEXT, 80, 2, CRM_PLL_FR_4);
+  crm_pll_config(CRM_PLL_SOURCE_HEXT, 144, 1, CRM_PLL_FR_4);
 
   /* enable pll */
   crm_clock_source_enable(CRM_CLOCK_SOURCE_PLL, TRUE);

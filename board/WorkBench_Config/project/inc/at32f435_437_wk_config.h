@@ -35,7 +35,6 @@ extern "C" {
 /* includes -----------------------------------------------------------------------*/
 #include "stdio.h"
 #include "at32f435_437.h"
-
 /* private includes -------------------------------------------------------------*/
 /* add user code begin private includes */
 

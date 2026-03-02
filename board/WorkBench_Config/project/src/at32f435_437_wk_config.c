@@ -71,15 +71,15 @@
   *         - hick                = on
   *         - hext                = off
   *         - hext                = HEXT_VALUE
-  *         - sclk                = 250000000
+  *         - sclk                = 288000000
   *         - ahbdiv              = 1
-  *         - ahbclk              = 250000000
+  *         - ahbclk              = 288000000
   *         - apb1div             = 2
-  *         - apb1clk             = 125000000
+  *         - apb1clk             = 144000000
   *         - apb2div             = 2
-  *         - apb2clk             = 125000000
-  *         - pll_ns              = 80
-  *         - pll_ms              = 2
+  *         - apb2clk             = 144000000
+  *         - pll_ns              = 144
+  *         - pll_ms              = 1
   *         - pll_fr              = 4
   * @param  none
   * @retval none
@@ -106,9 +106,6 @@ void wk_system_clock_config(void)
   {
   }
 
-  /* enable hext bypass */
-  crm_hext_bypass(TRUE);
-
   /* enable hext */
   crm_clock_source_enable(CRM_CLOCK_SOURCE_HEXT, TRUE);
 
@@ -126,7 +123,7 @@ void wk_system_clock_config(void)
   }
 
   /* config pll clock resource */
-  crm_pll_config(CRM_PLL_SOURCE_HEXT, 80, 2, CRM_PLL_FR_4);
+  crm_pll_config(CRM_PLL_SOURCE_HEXT, 144, 1, CRM_PLL_FR_4);
 
   /* enable pll */
   crm_clock_source_enable(CRM_CLOCK_SOURCE_PLL, TRUE);
