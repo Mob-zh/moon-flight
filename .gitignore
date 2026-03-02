@@ -63,3 +63,4 @@ project.*
 *.user
 *.dblite
 /rt-thread/tools/__pycache__
+*.pyc
