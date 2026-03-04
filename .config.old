@@ -228,10 +228,7 @@ CONFIG_FINSH_USING_OPTION_COMPLETION=y
 # CONFIG_RT_USING_DFS is not set
 # end of DFS: device virtual file system
 
-CONFIG_RT_USING_FAL=y
-CONFIG_FAL_USING_DEBUG=y
-CONFIG_FAL_PART_HAS_TABLE_CFG=y
-# CONFIG_FAL_USING_SFUD_PORT is not set
+# CONFIG_RT_USING_FAL is not set
 
 #
 # Device Drivers
