@@ -14,6 +14,8 @@ int main(void)
     /* set led2 pin mode to output */
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
 
+    IMU_init();
+
     while (1)
     {
         rt_pin_write(LED1_PIN, PIN_LOW);
