@@ -1,0 +1,16 @@
+import os
+import rtconfig
+from building import *
+
+cwd = GetCurrentDir()
+
+# add driver
+src = Glob(os.path.join(cwd, 'accgyro', '*.c'))
+
+path = [
+    cwd,                # 当前目录
+    os.path.join(cwd, 'accgyro')  # accgyro头文件目录
+]
+
+group = DefineGroup('driver', src, depend = [''], CPPPATH = path)
+Return('group')
