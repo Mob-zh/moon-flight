@@ -16,14 +16,13 @@
 #define ICM42688_TEST_THREAD_TICK       10   // 线程调度周期（100ms）
 
 static struct rt_spi_device *icm_spi_dev = RT_NULL;
-// static rt_thread_t icm_test_thread = RT_NULL;  // 测试线程句柄
-static accgyroDev_t icm_accgyro; // 惯导设备实例
 
 // ICM42688P的AAF滤波器参数（258Hz默认）
 static const aafConfig_t aafConfig = {6, 36, 10};
 // ODR配置表
 static const uint8_t odrLUT[] = {3, 4, 5, 6}; // 8K/4K/2K/1K对应的寄存器值
 
+accgyroDev_t g_icm_accgyro; // 惯导设备实例
 /************************ SPI设备挂载+初始化（RT-Thread DMA模式） ************************/
 /**
  * @brief 挂载SPI1设备（绑定CS引脚）+ 初始化SPI配置
@@ -192,12 +191,14 @@ static bool icm42688_init(accgyroDev_t *accgyro)
         return false;
 
     // 基础参数初始化
-    accgyro->gyroRateKHz     = 1;              // 默认1KHz采样率
-    accgyro->mpuDividerDrops = 0;              // 不分频
-    accgyro->scale           = 2000.0f;        // 2000DPS量程
-    accgyro->tempScale       = 1.0f / 132.48f; // 温度校准系数
-    accgyro->tempZero        = 25.0f;          // 温度零点25°C
+    accgyro->gyroRateKHz     = 1;                  // 默认1KHz采样率
+    accgyro->mpuDividerDrops = 0;                  // 不分频
+    accgyro->gyroScale       = 2000.0f / 32768.0f; // 陀螺仪换算系数：±2000 deg/s → 2000 / 32768 ≈ 0.061035
+    accgyro->scale           = 2000.0f;            // 2000DPS量程
+    accgyro->tempScale       = 1.0f / 132.48f;     // 温度校准系数
+    accgyro->tempZero        = 25.0f;              // 温度零点25°C
     accgyro->acc_1G          = 2048.0f;
+    accgyro->accScale        = 1.0f / 2048.0f; // 加速度计换算系数：LSB → g
 
     // 寄存器地址赋值
     accgyro->gyroDataReg = ICM42688P_RA_GYRO_DATA_X1;
@@ -245,8 +246,8 @@ static bool icm42688_init(accgyroDev_t *accgyro)
     rt_thread_mdelay(15);
     spi_write_reg(ICM42688P_RA_ACCEL_CONFIG0, (0 << 5) | odr_config);
     rt_thread_mdelay(15);
-		
-		return true;
+
+    return true;
 }
 
 /**
@@ -334,62 +335,4 @@ bool accgyro_init(accgyroDev_t *dev)
     }
 
     return true;
-}
-
-/************************ 测试线程函数 ************************/
-/**
- * @brief ICM42688测试线程入口
- * @param parameter: 线程参数（未使用）
- */
-void icm42688_test(void)
-{
-    rt_err_t ret = RT_EOK;
-
-    // 1. 初始化传感器
-    ret = accgyro_init(&icm_accgyro);
-    if (ret != RT_TRUE)
-    {
-        rt_kprintf("ICM42688P init failed!\n");
-        return;
-    }
-    rt_kprintf("ICM42688P init success! Start data reading...\n");
-
-    // 2. 循环读取并打印数据
-    while (1)
-    {
-        // 读取陀螺仪数据
-        if (icm_accgyro.readGyro(&icm_accgyro))
-        {
-            // 读取加速度计数据
-            if (icm_accgyro.readAcc(&icm_accgyro))
-            {
-                // 打印数据（原始值+物理值）
-                rt_kprintf("==================== ICM42688 Data ====================\n");
-                // 陀螺仪数据（原始值 + DPS值：原始值 / (32768/量程) = 原始值 / 16.384）
-                rt_kprintf("Gyro Raw: X=%d, Y=%d, Z=%d\n", icm_accgyro.gyroData[0], icm_accgyro.gyroData[1], icm_accgyro.gyroData[2]);
-                rt_kprintf("Gyro DPS: X=%.2f, Y=%.2f, Z=%.2f\n",
-                           (float)icm_accgyro.gyroData[0] / 16.384f,
-                           (float)icm_accgyro.gyroData[1] / 16.384f,
-                           (float)icm_accgyro.gyroData[2] / 16.384f);
-                // 加速度计数据（原始值 + 实际加速度m/s²）
-                rt_kprintf("Acc Raw:  X=%d, Y=%d, Z=%d\n", icm_accgyro.accData[0], icm_accgyro.accData[1], icm_accgyro.accData[2]);
-                rt_kprintf("Acc m/s²: X=%.2f, Y=%.2f, Z=%.2f\n",
-                           icm_accgyro.accScaled[0], icm_accgyro.accScaled[1], icm_accgyro.accScaled[2]);
-                // 温度数据
-                rt_kprintf("Temperature: %.2f °C\n", icm_accgyro.tempData);
-                rt_kprintf("=======================================================\n\n");
-            }
-            else
-            {
-                rt_kprintf("Read accelerometer data failed!\n");
-            }
-        }
-        else
-        {
-            rt_kprintf("Read gyroscope data failed!\n");
-        }
-
-        // 线程延时（100ms）
-        rt_thread_mdelay(ICM42688_TEST_THREAD_TICK);
-    }
 }

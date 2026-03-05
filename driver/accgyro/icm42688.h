@@ -76,6 +76,8 @@ struct accgyroDev_s
     uint8_t mpuDividerDrops;
     float   scale;
     float   tempScale;
+    float   gyroScale;
+    float   accScale;
     float   tempZero;
     float   acc_1G;
 
@@ -113,6 +115,8 @@ typedef struct
     uint16_t deltSqr;
     uint8_t  bitshift;
 } aafConfig_t;
+
+extern accgyroDev_t g_icm_accgyro; // 惯导设备实例
 
 bool accgyro_init(accgyroDev_t *dev);
 
