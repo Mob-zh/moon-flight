@@ -1,6 +1,9 @@
+#include "ano_data.h"
 #include "at32f435_437_wk_config.h"
 #include "drv_common.h"
 #include "drv_gpio.h"
+#include "flight_init.h"
+#include "imu.h"
 #include "wk_system.h"
 #include <rtdevice.h>
 #include <rtthread.h>
@@ -14,7 +17,7 @@ int main(void)
     /* set led2 pin mode to output */
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
 
-    IMU_init();
+    flight_init();
 
     while (1)
     {
