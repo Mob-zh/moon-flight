@@ -1,149 +1,180 @@
+#include "imu.h"
+#include "ano_data.h"
 #include "icm42688.h"
 #include <math.h>
+#include <rtthread.h>
 #include <stdint.h>
 
-// ==================== 基础数学 ====================
-#define M_PI                    3.14159265358979323846
-#define DEGREES_TO_RADIANS(deg) ((deg) * M_PI / 180.0f)
-#define RADIANS_TO_DEGREES(rad) ((rad) * 180.0f / M_PI)
+// ==================== 数据类型定义 ====================
+typedef struct
+{
+    float rol; // 横滚角
+    float pit; // 俯仰角
+    float yaw; // 偏航角
+} FLOAT_ANGLE;
 
 typedef struct
 {
-    float w, x, y, z;
-} quaternion_t;
+    float X;
+    float Y;
+    float Z;
+} FLOAT_XYZ;
 
-typedef struct
-{
-    float m[3][3];
-} matrix33_t;
+// ==================== 算法参数 ====================
+#define Kp       0.3f   // 比例增益控制加速度计的收敛速率
+#define Ki       0.001f // 积分增益控制陀螺偏差的收敛速度
+#define halfT    0.005f // 采样周期的一半 (对应100Hz)
+#define RadtoDeg 57.3f  // 弧度转角度系数
 
-typedef struct
-{
-    int16_t roll;  // 横滚
-    int16_t pitch; // 俯仰
-    int16_t yaw;   // 偏航（会飘）
-} attitudeEulerAngles_t;
+// ==================== 全局变量 ====================
+float q0 = 1, q1 = 0, q2 = 0, q3 = 0;  // 四元数元素
+float exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
 
-// 全局变量
-quaternion_t          q = {1, 0, 0, 0}; // 四元数
-matrix33_t            rMat;             // 旋转矩阵
-attitudeEulerAngles_t attitude;         // 姿态角
+FLOAT_ANGLE Att_Angle = {0};                // 姿态角输出
+FLOAT_XYZ   Acc_filt = {0}, Gyr_filt = {0}; // 滤波后的传感器数据
 
-// 快速平方根倒数
+// ==================== 快速平方根倒数 ====================
 static float invSqrt(float x)
 {
     return 1.0f / sqrtf(x);
 }
 
-// 计算旋转矩阵
-static void imuComputeRotationMatrix(void)
+// ==================== 数据准备函数 ====================
+void IMU_Prepare_Data(void)
 {
-    float qw = q.w, qx = q.x, qy = q.y, qz = q.z;
+    // 读取传感器数据
+    g_icm_accgyro.readGyro(&g_icm_accgyro);
+    g_icm_accgyro.readAcc(&g_icm_accgyro);
 
-    rMat.m[0][0] = 1 - 2 * qy * qy - 2 * qz * qz;
-    rMat.m[0][1] = 2 * qx * qy - 2 * qz * qw;
-    rMat.m[0][2] = 2 * qx * qz + 2 * qy * qw;
+    // 减去零偏
+    g_icm_accgyro.accData[0] -= g_icm_accgyro.accData_offset[0];
+    g_icm_accgyro.accData[1] -= g_icm_accgyro.accData_offset[1];
+    g_icm_accgyro.accData[2] -= g_icm_accgyro.accData_offset[2];
 
-    rMat.m[1][0] = 2 * qx * qy + 2 * qz * qw;
-    rMat.m[1][1] = 1 - 2 * qx * qx - 2 * qz * qz;
-    rMat.m[1][2] = 2 * qy * qz - 2 * qx * qw;
+    g_icm_accgyro.gyroData[0] -= g_icm_accgyro.gyroData_offset[0];
+    g_icm_accgyro.gyroData[1] -= g_icm_accgyro.gyroData_offset[1];
+    g_icm_accgyro.gyroData[2] -= g_icm_accgyro.gyroData_offset[2];
 
-    rMat.m[2][0] = 2 * qx * qz - 2 * qy * qw;
-    rMat.m[2][1] = 2 * qy * qz + 2 * qx * qw;
-    rMat.m[2][2] = 1 - 2 * qx * qx - 2 * qy * qy;
+    // 陀螺仪数据处理：LSB → 弧度/秒
+    Gyr_filt.X = (float)(g_icm_accgyro.gyroData[0] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
+    Gyr_filt.Y = (float)(g_icm_accgyro.gyroData[1] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
+    Gyr_filt.Z = (float)(g_icm_accgyro.gyroData[2] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
+
+    // 加速度计数据处理：LSB → g
+    Acc_filt.X = (float)(g_icm_accgyro.accData[0] * g_icm_accgyro.accScale);
+    Acc_filt.Y = (float)(g_icm_accgyro.accData[1] * g_icm_accgyro.accScale);
+    Acc_filt.Z = (float)(g_icm_accgyro.accData[2] * g_icm_accgyro.accScale);
 }
 
-// ==================== 核心：Mahony 滤波 ====================
-// 只使用：陀螺仪 + 加速度计
-static void IMU_Update(float dt,                     // 时间间隔，单位秒
-                       float gx, float gy, float gz, // 陀螺仪，单位：deg/s
-                       float ax, float ay, float az) // 加速度计，任意单位
+// ==================== 核心姿态解算算法 ====================
+void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
 {
-    // 1. 转为弧度制
-    gx = DEGREES_TO_RADIANS(gx);
-    gy = DEGREES_TO_RADIANS(gy);
-    gz = DEGREES_TO_RADIANS(gz);
+    float ax = Acc_filt->X, ay = Acc_filt->Y, az = Acc_filt->Z;
+    float gx = Gyr_filt->X, gy = Gyr_filt->Y, gz = Gyr_filt->Z;
+    float vx, vy, vz;
+    float ex, ey, ez;
+    float norm;
 
-    // 2. 归一化加速度计
-    float norm = invSqrt(ax * ax + ay * ay + az * az);
-    ax *= norm;
-    ay *= norm;
-    az *= norm;
+    float q0q0 = q0 * q0;
+    float q0q1 = q0 * q1;
+    float q0q2 = q0 * q2;
+    float q0q3 = q0 * q3;
+    float q1q1 = q1 * q1;
+    float q1q2 = q1 * q2;
+    float q1q3 = q1 * q3;
+    float q2q2 = q2 * q2;
+    float q2q3 = q2 * q3;
+    float q3q3 = q3 * q3;
 
-    // 3. 求误差（重力方向偏差）
-    float ex = ay * rMat.m[2][2] - az * rMat.m[2][1];
-    float ey = az * rMat.m[2][0] - ax * rMat.m[2][2];
-    float ez = ax * rMat.m[2][1] - ay * rMat.m[2][0];
+    // 检查加速度计数据有效性
+    if (ax * ay * az == 0)
+        return;
 
-    // 4. 融合修正（比例控制）
-    float Kp = 2.0f; // 调这个！越大加速度计修正越强
-    float Ki = 0.0f; // 无磁力计，积分关掉
+    // 归一化加速度计数据
+    norm = invSqrt(ax * ax + ay * ay + az * az);
+    ax   = ax * norm;
+    ay   = ay * norm;
+    az   = az * norm;
 
-    // 积分项（这里关掉，防止漂移）
-    static float ix = 0, iy = 0, iz = 0;
-    ix += ex * Ki * dt;
-    iy += ey * Ki * dt;
-    iz += ez * Ki * dt;
+    // 陀螺仪积分估计重力向量(机体坐标系)
+    vx = 2 * (q1 * q3 - q0 * q2);   // 矩阵(3,1)项
+    vy = 2 * (q0 * q1 + q2 * q3);   // 矩阵(3,2)项
+    vz = q0q0 - q1q1 - q2q2 + q3q3; // 矩阵(3,3)项
 
-    gx += Kp * ex + ix;
-    gy += Kp * ey + iy;
-    gz += Kp * ez + iz;
+    // 向量叉乘得到误差
+    ex = (ay * vz - az * vy);
+    ey = (az * vx - ax * vz);
+    ez = (ax * vy - ay * vx);
 
-    // 5. 四元数积分
-    float qw = q.w, qx = q.x, qy = q.y, qz = q.z;
+    // 误差积分
+    exInt = exInt + ex * Ki;
+    eyInt = eyInt + ey * Ki;
+    ezInt = ezInt + ez * Ki;
 
-    q.w += (-qx * gx - qy * gy - qz * gz) * 0.5f * dt;
-    q.x += (+qw * gx + qy * gz - qz * gy) * 0.5f * dt;
-    q.y += (+qw * gy - qx * gz + qz * gx) * 0.5f * dt;
-    q.z += (+qw * gz + qx * gy - qy * gx) * 0.5f * dt;
+    // 将误差PI补偿到陀螺仪
+    gx = gx + Kp * ex + exInt;
+    gy = gy + Kp * ey + eyInt;
+    gz = gz + Kp * ez + ezInt;
 
-    // 6. 归一化四元数
-    norm = invSqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
-    q.w *= norm;
-    q.x *= norm;
-    q.y *= norm;
-    q.z *= norm;
+    // 四元数微分方程
+    q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * halfT;
+    q1 = q1 + (q0 * gx + q2 * gz - q3 * gy) * halfT;
+    q2 = q2 + (q0 * gy - q1 * gz + q3 * gx) * halfT;
+    q3 = q3 + (q0 * gz + q1 * gy - q2 * gx) * halfT;
 
-    // 7. 更新旋转矩阵
-    imuComputeRotationMatrix();
+    // 归一化四元数
+    norm = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+    q0   = q0 * norm;
+    q1   = q1 * norm;
+    q2   = q2 * norm;
+    q3   = q3 * norm;
 
-    // 8. 计算欧拉角
-    attitude.roll  = RADIANS_TO_DEGREES(atan2f(rMat.m[2][1], rMat.m[2][2])) * 10;
-    attitude.pitch = RADIANS_TO_DEGREES(asinf(-rMat.m[2][0])) * 10;
-    // yaw 只能靠陀螺仪积分，会漂移！
-    attitude.yaw += RADIANS_TO_DEGREES(gz) * dt * 10;
+    // 发送四元数数据给上位机
+    // ANO_DT_Send_Att_RawData(q0, q1, q2, q3);
+
+    // 四元数转换成欧拉角(Z->Y->X)
+    // 偏航角YAW - 使用阈值过滤减少漂移
+    if ((Gyr_filt->Z * RadtoDeg > 1.0f) || (Gyr_filt->Z * RadtoDeg < -1.0f))
+    {
+        Att_Angle->yaw += Gyr_filt->Z * RadtoDeg * halfT * 2.0f;
+    }
+
+    // 横滚角ROLL
+    Att_Angle->rol = -asin(2.0f * (q1 * q3 - q0 * q2)) * RadtoDeg;
+
+    // 俯仰角PITCH
+    Att_Angle->pit = -atan2(2.0f * q2 * q3 + 2.0f * q0 * q1, q0q0 - q1q1 - q2q2 + q3q3) * RadtoDeg;
 }
 
+// ==================== 线程入口函数 ====================
 static void IMU_update_thread_entry(void *parameter)
 {
-    // 校准偏移（先运行校准函数获取，示例值需实际校准）
-    float accOffset[3]  = {0.0f, 0.0f, 0.0f}; // 静态偏移，需校准
-    float gyroOffset[3] = {0.0f, 0.0f, 0.0f}; // 陀螺仪零偏，需校准
-
+    // char status[64];
     while (1)
     {
-        // 读取传感器数据
-        g_icm_accgyro.readGyro(&g_icm_accgyro);
-        g_icm_accgyro.readAcc(&g_icm_accgyro);
+        // 准备传感器数据
+        IMU_Prepare_Data();
 
-        // 1. 陀螺仪数据处理：LSB → deg/s（减去零偏）
-        float gx = (float)g_icm_accgyro.gyroData[0] * g_icm_accgyro.gyroScale - gyroOffset[0];
-        float gy = (float)g_icm_accgyro.gyroData[1] * g_icm_accgyro.gyroScale - gyroOffset[1];
-        float gz = (float)g_icm_accgyro.gyroData[2] * g_icm_accgyro.gyroScale - gyroOffset[2];
+        // 执行姿态解算
+        IMUupdate(&Gyr_filt, &Acc_filt, &Att_Angle);
 
-        // 2. 加速度计数据处理：LSB → g（减去零偏）
-        float ax = (float)g_icm_accgyro.accData[0] * g_icm_accgyro.accScale - accOffset[0];
-        float ay = (float)g_icm_accgyro.accData[1] * g_icm_accgyro.accScale - accOffset[1];
-        float az = (float)g_icm_accgyro.accData[2] * g_icm_accgyro.accScale - accOffset[2];
+        // 发送原始数据给上位机（可选）
+        // ANO_DT_Send_IMU_RawData(g_icm_accgyro.accData[0], g_icm_accgyro.accData[1], g_icm_accgyro.accData[2],
+        //                         g_icm_accgyro.gyroData[0], g_icm_accgyro.gyroData[1], g_icm_accgyro.gyroData[2], 0);
 
-        // 3. 调用IMU更新（dt=0.001f 对应1KHz采样率）
-        IMU_Update(0.001f, gx, gy, gz, ax, ay, az);
+        // 发送姿态角数据给上位机
+        // 参数顺序: A(俯仰pitch), B(横滚roll), C(偏航yaw)
+        // ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
 
-        // 4. 匹配1KHz采样率（1ms延时）
-        rt_thread_mdelay(1);
+        // sprintf(status, "rol: %f, pit: %f, yaw: %f\n", Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
+        // rt_kprintf("%s", status);
+
+        // 延时10ms，对应100Hz采样率
+        rt_thread_mdelay(10);
     }
 }
 
+// ==================== IMU初始化函数 ====================
 void IMU_init(void)
 {
     accgyro_init(&g_icm_accgyro);

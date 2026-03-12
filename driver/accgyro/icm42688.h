@@ -89,13 +89,15 @@ struct accgyroDev_s
     /* 数据缓存 */
     int16_t gyroData[3];
     int16_t accData[3];
+    int16_t gyroData_offset[3];
+    int16_t accData_offset[3];
     float   tempData;
-    float   accScaled[3];
 
     /* 函数指针 */
     bool (*init)(struct accgyroDev_s *);
     bool (*readGyro)(struct accgyroDev_s *);
     bool (*readAcc)(struct accgyroDev_s *);
+    bool (*clear_offset)(struct accgyroDev_s *);
 };
 
 /************************ 滤波器配置 ************************/

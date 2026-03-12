@@ -1,6 +1,7 @@
 #include "icm42688.h"
 #include "at32f435_437_gpio.h"
 #include "drv_spi.h"
+#include "flight_init.h"
 #include <rtdevice.h>
 #include <rtthread.h>
 
@@ -247,6 +248,9 @@ static bool icm42688_init(accgyroDev_t *accgyro)
     spi_write_reg(ICM42688P_RA_ACCEL_CONFIG0, (0 << 5) | odr_config);
     rt_thread_mdelay(15);
 
+    // 记录零偏
+    accgyro->clear_offset(accgyro);
+
     return true;
 }
 
@@ -297,12 +301,82 @@ static bool icm42688_read_acc(accgyroDev_t *accgyro)
     accgyro->accData[1] = (int16_t)((buf[2] << 8) | buf[3]); // Y轴
     accgyro->accData[2] = (int16_t)((buf[4] << 8) | buf[5]); // Z轴
 
-    // 转换为实际加速度(m/s²)，1G=9.80665 m/s²
-    accgyro->accScaled[0] = (float)accgyro->accData[0] / accgyro->acc_1G * 9.80665f;
-    accgyro->accScaled[1] = (float)accgyro->accData[1] / accgyro->acc_1G * 9.80665f;
-    accgyro->accScaled[2] = (float)accgyro->accData[2] / accgyro->acc_1G * 9.80665f;
-
     return true;
+}
+
+uint8_t ICM42688_offset(accgyroDev_t *dev, uint16_t sensivity)
+{
+    static int32_t  tempgx = 0, tempgy = 0, tempgz = 0;
+    static int32_t  tempax = 0, tempay = 0, tempaz = 0;
+    static uint16_t cnt_a = 0; // 使用static修饰的局部变量，表明次变量具有静态存储周期，也就是说该函数执行完后不释放内存
+    if (cnt_a == 0)
+    {
+        dev->accData[0]         = 0;
+        dev->accData[1]         = 0;
+        dev->accData[2]         = 0;
+        dev->gyroData[0]        = 0;
+        dev->gyroData[1]        = 0;
+        dev->gyroData[2]        = 0;
+        dev->accData_offset[0]  = 0;
+        dev->accData_offset[1]  = 0;
+        dev->accData_offset[2]  = 0;
+        dev->gyroData_offset[0] = 0;
+        dev->gyroData_offset[1] = 0;
+        dev->gyroData_offset[2] = 0;
+        tempgx                  = 0;
+        tempgy                  = 0;
+        tempgz                  = 0;
+        cnt_a                   = 1;
+        sensivity               = 0;
+    }
+
+    while (cnt_a < 200)
+    {
+        dev->readAcc(dev);
+        dev->readGyro(dev);
+
+        tempax += dev->accData[0];
+        tempay += dev->accData[1];
+        tempaz += dev->accData[2];
+        tempgx += dev->gyroData[0];
+        tempgy += dev->gyroData[1];
+        tempgz += dev->gyroData[2];
+
+        cnt_a++;
+    }
+
+    if (cnt_a == 200) // 200个数值求平均
+    {
+        dev->accData_offset[0] = tempax / cnt_a;
+        dev->accData_offset[1] = tempay / cnt_a;
+        dev->accData_offset[2] = tempaz / cnt_a;
+        cnt_a                  = 0;
+
+        return 1;
+    }
+
+    return 0;
+}
+
+/******************************************************************************
+* 函  数：void MPU6050_DataProcess(void)
+* 功  能：对MPU6050进行去零偏处理
+* 参  数：无
+* 返回值：无
+* 备  注：无
+
+*******************************************************************************/
+bool ICM42688_clear_offset(accgyroDev_t *dev)
+{
+    // 查找标志位IMU_OFFSET是否设置，若置位则进行校准
+    if (get_init_check_flag(IMU_CLEAR_OFFSET_CHECK)) // 陀螺仪进行零偏校准
+    {
+        if (ICM42688_offset(dev, 0))
+        {
+            // 校准完成，清除标志位，待完成实际代码
+            clear_init_check_bit(IMU_CLEAR_OFFSET_CHECK);
+        }
+    }
 }
 
 /************************ 对外接口 ************************/
@@ -325,9 +399,10 @@ bool accgyro_init(accgyroDev_t *dev)
     }
 
     // 初始化陀螺仪
-    dev->init     = icm42688_init;
-    dev->readGyro = icm42688_read_gyro;
-    dev->readAcc  = icm42688_read_acc;
+    dev->init         = icm42688_init;
+    dev->readGyro     = icm42688_read_gyro;
+    dev->readAcc      = icm42688_read_acc;
+    dev->clear_offset = ICM42688_clear_offset;
     if (!(dev->init(dev)))
     {
         rt_kprintf("ICM42688P initialization failed!\n");
