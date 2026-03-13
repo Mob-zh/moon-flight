@@ -51,7 +51,7 @@
 #define ICM42688P_RA_TEMP_DATA1    0x1E // 温度数据起始地址
 
 // WHO AM I
-#define MPU_RA_WHO_AM_I          0x75
+#define ICM42688P_RA_WHO_AM_I    0x75
 #define ICM42688P_WHO_AM_I_CONST 0x47 // ICM42688P的ID
 
 // 修复陀螺仪卡顿相关
