@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+
 """
-穿越机地面站软件 V1.0
+穿越机地面站软件 V1.1 适配匿名科创ANO上位机协议
 功能：
 1. 实时姿态角显示（Roll, Pitch, Yaw）
-2. 3D姿态可视化（无人机模型实时旋转）
+2. 3D姿态可视化（无人机模型实时旋转，优化精致模型）
 3. 遥控通道监控（0-8通道）
 4. 数据记录和CSV导出
 5. 传感器原始数据显示
@@ -70,12 +71,13 @@ class DroneGroundStation:
         # 启动GUI
         self.setup_gui()
         self.log_message("地面站启动完成，已适配匿名科创ANO通信协议")
-        self.log_message("支持姿态角、IMU原始数据、四元数解析，可直连ANO飞控")
+        self.log_message("3D无人机模型已优化，支持完整机身、机臂、螺旋桨可视化")
+        self.log_message("已修正俯仰、横滚旋转方向，贴合实际操控直觉，抬头显示抬头、横滚方向匹配操控")
 
     def setup_gui(self):
         """设置图形用户界面，优化布局和控件样式"""
         self.root = tk.Tk()
-        self.root.title("穿越机地面站 V2.1（ANO协议版）")
+        self.root.title("穿越机地面站 V1.1（ANO协议版）")
         self.root.geometry("1450x920")
         # 窗口最小大小限制
         self.root.minsize(1200, 800)
@@ -210,18 +212,20 @@ class DroneGroundStation:
         self.root.after(50, self.update_display)
 
     def init_3d_plot(self):
-        """初始化3D姿态可视化画布，绘制无人机简易模型"""
+        """初始化3D姿态可视化画布，优化画布参数适配精致无人机模型"""
         self.ax_3d.clear()
-        self.ax_3d.set_xlabel('X轴', labelpad=8)
-        self.ax_3d.set_ylabel('Y轴', labelpad=8)
-        self.ax_3d.set_zlabel('Z轴', labelpad=8)
-        self.ax_3d.set_title('无人机3D姿态实时显示', fontsize=11, pad=12)
-        # 设置坐标轴范围，固定视角
-        self.ax_3d.set_xlim(-2, 2)
-        self.ax_3d.set_ylim(-2, 2)
-        self.ax_3d.set_zlim(0, 3)
-        # 关闭自动旋转，保持固定视角
-        self.ax_3d.view_init(elev=25, azim=45)
+        self.ax_3d.set_xlabel('X轴（横滚）', labelpad=8, fontsize=9)
+        self.ax_3d.set_ylabel('Y轴（偏航）', labelpad=8, fontsize=9)
+        self.ax_3d.set_zlabel('Z轴（俯仰/高度）', labelpad=8, fontsize=9)
+        self.ax_3d.set_title('穿越机3D姿态实时显示（优化模型+直觉姿态方向）', fontsize=11, pad=12, weight='bold')
+        # 调整坐标轴范围，适配优化后模型尺寸
+        self.ax_3d.set_xlim(-2.5, 2.5)
+        self.ax_3d.set_ylim(-2.5, 2.5)
+        self.ax_3d.set_zlim(0, 3.5)
+        # 优化视角，更直观查看无人机姿态，关闭自动旋转
+        self.ax_3d.view_init(elev=30, azim=50)
+        # 关闭坐标轴网格，提升视觉整洁度
+        self.ax_3d.grid(False)
 
     def init_2d_plot(self):
         """初始化2D姿态角曲线"""
@@ -269,7 +273,7 @@ class DroneGroundStation:
             self.is_connected = True
             self.is_thread_running = True
             self.update_status("模拟数据模式", "green")
-            self.log_message("已开启模拟数据模式，自动生成ANO协议格式数据")
+            self.log_message("已开启模拟数据模式，自动生成ANO协议格式数据，姿态方向已优化贴合直觉")
             # 启动模拟数据线程
             self.receive_thread = threading.Thread(target=self.simulate_data_thread, daemon=True)
             self.receive_thread.start()
@@ -305,7 +309,7 @@ class DroneGroundStation:
             self.connect_btn.config(text="断开串口")
             self.update_status(f"已连接 {port}@{baud}", "green")
             self.log_message(f"串口连接成功：{port}，波特率{baud}")
-            self.log_message("等待接收ANO协议飞控数据...")
+            self.log_message("等待接收ANO协议飞控数据，姿态旋转方向已修正，贴合操控直觉")
 
             # 启动串口数据接收线程
             self.receive_thread = threading.Thread(target=self.receive_data_thread, daemon=True)
@@ -458,7 +462,7 @@ class DroneGroundStation:
         """模拟ANO协议数据生成线程，无硬件时测试"""
         while self.is_thread_running and self.simulate_mode:
             try:
-                # 生成平滑的随机姿态角
+                # 生成平滑的随机姿态角，适配修正后的旋转方向
                 self.euler_angles['roll'] = np.clip(self.euler_angles['roll'] + random.uniform(-1.5, 1.5), -45, 45)
                 self.euler_angles['pitch'] = np.clip(self.euler_angles['pitch'] + random.uniform(-1.2, 1.2), -45, 45)
                 self.euler_angles['yaw'] += random.uniform(-0.8, 0.8)
@@ -571,17 +575,26 @@ class DroneGroundStation:
             self.log_message(f"保存数据失败：{str(e)}")
 
     def update_3d_attitude(self):
-        """更新3D姿态可视化，绘制无人机模型"""
+        """优化升级3D无人机姿态可视化，替换简陋模型为精致穿越机模型
+        新增：中心机身、加粗机臂、前后区分、螺旋桨模块、机头方向箭头
+        优化：配色区分、线条粗细、姿态旋转逻辑，修正俯仰横滚方向，贴合真实穿越机操控直觉
+        核心修正：反转Pitch、Roll旋转矩阵符号，抬俯仰显示抬头，横滚方向匹配操控
+        """
         self.init_3d_plot()
-        roll = np.radians(self.euler_angles['roll'])
-        pitch = np.radians(self.euler_angles['pitch'])
+        # 角度转弧度，核心修正：反转俯仰Pitch、横滚Roll角度，匹配操控直觉
+        # 原角度为负转正、正转负，解决抬头变低头、横滚反向问题
+        roll = np.radians(-self.euler_angles['roll'])
+        pitch = np.radians(-self.euler_angles['pitch'])
         yaw = np.radians(self.euler_angles['yaw'])
 
-        # 无人机机体坐标系参数
-        arm_length = 1.5
-        height = 0.8
+        # 优化后的穿越机尺寸参数，比例更协调
+        arm_length = 1.6       # 机臂长度
+        arm_thick = 2.5        # 机臂线条粗细
+        body_radius = 0.3      # 中心机身半径
+        prop_radius = 0.5      # 螺旋桨半径
+        body_height = 1.0      # 中心机身高度
 
-        # 旋转矩阵计算
+        # 旋转矩阵计算，修正旋转方向后保持原有姿态旋转顺序不变
         R_roll = np.array([[1, 0, 0],
                            [0, np.cos(roll), -np.sin(roll)],
                            [0, np.sin(roll), np.cos(roll)]])
@@ -591,32 +604,93 @@ class DroneGroundStation:
         R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
                           [np.sin(yaw), np.cos(yaw), 0],
                           [0, 0, 1]])
+        # 总旋转矩阵：偏航→俯仰→横滚，符合无人机标准姿态旋转顺序
         R = R_yaw @ R_pitch @ R_roll
 
-        # 定义无人机机臂端点
-        points = np.array([
-            [arm_length, 0, 0], [-arm_length, 0, 0],
-            [0, arm_length, 0], [0, -arm_length, 0],
-            [0, 0, height], [0, 0, 0]
+        # 1. 绘制中心机身主体（立方体，模拟飞控核心板）
+        body_points = np.array([
+            [-body_radius, -body_radius, 0],
+            [body_radius, -body_radius, 0],
+            [body_radius, body_radius, 0],
+            [-body_radius, body_radius, 0],
+            [-body_radius, -body_radius, body_height],
+            [body_radius, -body_radius, body_height],
+            [body_radius, body_radius, body_height],
+            [-body_radius, body_radius, body_height]
         ])
+        rotated_body = (R @ body_points.T).T
+        # 绘制机身边框
+        body_edges = [
+            [0,1], [1,2], [2,3], [3,0],
+            [4,5], [5,6], [6,7], [7,4],
+            [0,4], [1,5], [2,6], [3,7]
+        ]
+        for edge in body_edges:
+            self.ax_3d.plot(
+                [rotated_body[edge[0], 0], rotated_body[edge[1], 0]],
+                [rotated_body[edge[0], 1], rotated_body[edge[1], 1]],
+                [rotated_body[edge[0], 2], rotated_body[edge[1], 2]],
+                color='#2C3E50', linewidth=3
+            )
 
-        # 旋转后坐标
-        rotated_points = (R @ points.T).T
+        # 2. 绘制四根机臂，区分前后机臂颜色，加粗线条
+        # 机臂端点定义：前左、前右、后左、后右
+        arm_endpoints = np.array([
+            [arm_length, 0, body_height/2],   # 前右
+            [-arm_length, 0, body_height/2],  # 后左
+            [0, arm_length, body_height/2],   # 右前
+            [0, -arm_length, body_height/2]   # 左后
+        ])
+        rotated_arms = (R @ arm_endpoints.T).T
+        body_center = np.array([0, 0, body_height/2])
+        rotated_center = (R @ body_center.T).T
 
-        # 绘制机臂
-        self.ax_3d.plot([rotated_points[4, 0], rotated_points[0, 0]],
-                        [rotated_points[4, 1], rotated_points[0, 1]],
-                        [rotated_points[4, 2], rotated_points[0, 2]], 'r-', linewidth=2)
-        self.ax_3d.plot([rotated_points[4, 0], rotated_points[1, 0]],
-                        [rotated_points[4, 1], rotated_points[1, 1]],
-                        [rotated_points[4, 2], rotated_points[1, 2]], 'b-', linewidth=2)
-        self.ax_3d.plot([rotated_points[4, 0], rotated_points[2, 0]],
-                        [rotated_points[4, 1], rotated_points[2, 1]],
-                        [rotated_points[4, 2], rotated_points[2, 2]], 'g-', linewidth=2)
-        self.ax_3d.plot([rotated_points[4, 0], rotated_points[3, 0]],
-                        [rotated_points[4, 1], rotated_points[3, 1]],
-                        [rotated_points[4, 2], rotated_points[3, 2]], 'm-', linewidth=2)
+        # 机臂配色：前机臂红色，后机臂蓝色，区分方向
+        arm_colors = ['#E74C3C', '#3498DB', '#1ABC9C', '#9B59B6']
+        for i in range(4):
+            self.ax_3d.plot(
+                [rotated_center[0], rotated_arms[i, 0]],
+                [rotated_center[1], rotated_arms[i, 1]],
+                [rotated_center[2], rotated_arms[i, 2]],
+                color=arm_colors[i], linewidth=arm_thick
+            )
 
+        # 3. 绘制螺旋桨模块，每根机臂末端一个螺旋桨
+        prop_colors = ['#FF5733', '#33A1FF', '#33FF57', '#FF33A6']
+        for i in range(4):
+            prop_center = rotated_arms[i]
+            # 螺旋桨十字叶片
+            prop_blades = np.array([
+                [prop_radius, 0, 0], [-prop_radius, 0, 0],
+                [0, prop_radius, 0], [0, -prop_radius, 0]
+            ])
+            rotated_blades = (R @ prop_blades.T).T + prop_center
+            self.ax_3d.plot(
+                [rotated_blades[0,0], rotated_blades[1,0]],
+                [rotated_blades[0,1], rotated_blades[1,1]],
+                [rotated_blades[0,2], rotated_blades[1,2]],
+                color=prop_colors[i], linewidth=2
+            )
+            self.ax_3d.plot(
+                [rotated_blades[2,0], rotated_blades[3,0]],
+                [rotated_blades[2,1], rotated_blades[3,1]],
+                [rotated_blades[2,2], rotated_blades[3,2]],
+                color=prop_colors[i], linewidth=2
+            )
+
+        # 4. 绘制机头方向箭头，明确无人机前方，避免姿态混淆
+        arrow_start = rotated_center
+        arrow_end = (R @ np.array([arm_length*0.8, 0, body_height/2]).T).T
+        self.ax_3d.plot(
+            [arrow_start[0], arrow_end[0]],
+            [arrow_start[1], arrow_end[1]],
+            [arrow_start[2], arrow_end[2]],
+            color='#F1C40F', linewidth=4, linestyle='-'
+        )
+        # 箭头尖端
+        self.ax_3d.scatter(arrow_end[0], arrow_end[1], arrow_end[2], color='#F1C40F', s=50)
+
+        # 强制刷新画布，提升渲染流畅度
         self.canvas_3d.draw()
 
     def update_2d_curve(self):
