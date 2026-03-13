@@ -92,3 +92,50 @@ void ANO_DT_Send_IMU_RawData(int16_t Ax, int16_t Ay, int16_t Az, int16_t Gx, int
         rt_kprintf("%c", BUFF[i]);
     }
 }
+
+// 发送四元数数据给上位机
+void ANO_DT_Send_Att_RawData(float V0, float V1, float V2, float V3)
+{
+    int     i;
+    uint8_t sumcheck = 0;
+    uint8_t addcheck = 0;
+    uint8_t _cnt     = 0;
+
+    V0 = V0 * 10000;
+    V1 = V1 * 10000;
+    V2 = V2 * 10000;
+    V3 = V3 * 10000;
+
+    BUFF[_cnt++] = 0xAA; // 帧头
+    BUFF[_cnt++] = 0xFF; // 目标地址
+    BUFF[_cnt++] = 0X04; // 功能码
+    BUFF[_cnt++] = 0x09; // 数据长度
+    // 发送四元数数据
+    BUFF[_cnt++] = BYTE0(V0); // 数据内容,小段模式，低位在前,需要将字节进行拆分，调用上面的宏定义即可。
+    BUFF[_cnt++] = BYTE1(V0);
+
+    BUFF[_cnt++] = BYTE0(V1);
+    BUFF[_cnt++] = BYTE1(V1);
+
+    BUFF[_cnt++] = BYTE0(V2);
+    BUFF[_cnt++] = BYTE1(V2);
+
+    BUFF[_cnt++] = BYTE0(V3); // 数据内容,小段模式，低位在前,需要将字节进行拆分，调用上面的宏定义即可。
+    BUFF[_cnt++] = BYTE1(V3);
+
+    BUFF[_cnt++] = 0x00;
+
+    // SC和AC的校验直接抄最上面上面简介的即可
+    for (i = 0; i < BUFF[3] + 4; i++)
+    {
+        sumcheck += BUFF[i];
+        addcheck += sumcheck;
+    }
+    BUFF[_cnt++] = sumcheck;
+    BUFF[_cnt++] = addcheck;
+
+    for (i = 0; i < _cnt; i++)
+    {
+        rt_kprintf("%c", BUFF[i]);
+    }
+}
