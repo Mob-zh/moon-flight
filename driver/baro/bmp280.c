@@ -1,4 +1,5 @@
 #include "bmp280.h"
+#include "math.h"
 #include "spi_dev.h"
 // -------------------------- SPI硬件配置 --------------------------
 #define BMP280_SPI_BUS_NAME "spi2"      // SPI2总线名称（对应menuconfig初始化的SPI2）
@@ -29,6 +30,9 @@ int16_t  Dig_P8;
 int16_t  Dig_P9;
 
 baroDev_t g_bmp280_baro; // 气压计设备实例
+
+// 函数声明
+static bool bmp280_detect(void);
 
 /************************ SPI设备挂载+初始化（RT-Thread DMA模式） ************************/
 /**
@@ -69,34 +73,46 @@ static int baro_device_attach(void)
 }
 
 /**
- * @brief 读取转换3个连续寄存器
- * @param addr: 起始寄存器地址
+ * @brief 读取转换3个连续寄存器（温度/压力专用）
+ * @param addr: 起始寄存器地址（必须是 MSB 寄存器地址，如 BMP280_TEMPERATURE_MSB_REG）
  */
 static int32_t bmp280_read_3regs(uint8_t addr)
 {
-    uint8_t ArrayReadThree[3]; // 定义要读取数据的测试数组
-    long    temp = 0;
-    spi_read_regs(bmp280_spi_dev, addr, ArrayReadThree, 3); // ArrayRead[0]:LSB ArrayRead[1]:MSB ArrayRead[2]:MSB
+    uint8_t data[3] = {0};
+    int32_t adc_val = 0;
 
-    temp = (int32_t)(((uint32_t)ArrayReadThree[0] << 12) | ((uint32_t)ArrayReadThree[1] << 4) | ((uint32_t)ArrayReadThree[2] >> 4));
+    // 读取3个寄存器：data[0] = MSB, data[1] = LSB, data[2] = XLSB
+    spi_read_regs(bmp280_spi_dev, addr, data, 3);
 
-    return temp;
+    // 正确拼接20位数据：(MSB << 12) | (LSB << 4) | (XLSB >> 4)
+    adc_val = ((int32_t)data[0] << 12) | ((int32_t)data[1] << 4) | ((int32_t)data[2] >> 4);
+
+    // 校验数据有效性（避免全0/全1的错误数据）
+    if (adc_val == 0 || adc_val == 0xFFFFF)
+    {
+        rt_kprintf("BMP280 ADC data read error: 0x%08X\n", adc_val);
+        return -1;
+    }
+
+    return adc_val;
 }
 
 /**
- * @brief 读取转换3个连续寄存器
- * @param addr: 起始寄存器地址
+ * @brief 读取转换2个连续寄存器（校准参数专用）
+ * @param addr: 起始寄存器地址（LSB地址）
  */
 static int16_t bmp280_read_2regs(uint8_t addr)
 {
-    uint8_t ArrayReadTwo[2]; // 定义要读取数据的测试数组
-    int16_t temp = 0;
-    spi_read_regs(bmp280_spi_dev, addr, ArrayReadTwo, 2); // ArrayRead[0]:LSB ArrayRead[1]:MSB
+    uint8_t data[2] = {0};
+    int16_t cal_val = 0;
 
-    temp = (int16_t)ArrayReadTwo[1] << 8;
-    temp |= (int16_t)ArrayReadTwo[0];
+    // 读取2个寄存器：data[0] = LSB, data[1] = MSB
+    spi_read_regs(bmp280_spi_dev, addr, data, 2);
 
-    return temp;
+    // 正确拼接16位校准参数：MSB << 8 | LSB
+    cal_val = (int16_t)((data[1] << 8) | data[0]);
+
+    return cal_val;
 }
 
 /************************ 核心初始化与数据读取 ************************/
@@ -105,10 +121,10 @@ static int16_t bmp280_read_2regs(uint8_t addr)
  * @brief 气压计初始化
  * @param baro: 气压计设备结构体指针
  */
-static void bmp280_init(baroDev_t *baro)
+static bool bmp280_init(baroDev_t *baro)
 {
     if (baro == NULL)
-        return;
+        return false;
 
     // 检测设备
     if (!bmp280_detect())
@@ -117,9 +133,9 @@ static void bmp280_init(baroDev_t *baro)
     }
 
     uint8_t Osrs_T   = 1; // Temperature oversampling x 1
-    uint8_t Osrs_P   = 3; // Pressure oversampling x 1
+    uint8_t Osrs_P   = 1; // Pressure oversampling x 1
     uint8_t Mode     = 3; // Normal mode
-    uint8_t T_sb     = 5; // Tstandby 1000ms
+    uint8_t T_sb     = 4; // Tstandby 500ms
     uint8_t Filter   = 4; // Filter
     uint8_t Spi3w_en = 0; // 3-wire SPI Disable
 
@@ -127,8 +143,16 @@ static void bmp280_init(baroDev_t *baro)
     uint8_t Config_reg    = (T_sb << 5) | (Filter << 2) | Spi3w_en;
     // 状态全部清零
     spi_write_reg(bmp280_spi_dev, BMP280_RESET_REG, BMP280_RESET_VALUE);
+    rt_thread_mdelay(10);
+
     spi_write_reg(bmp280_spi_dev, BMP280_CTRLMEAS_REG, Ctrl_meas_reg);
+    // uint8_t ctrl_meas = spi_read_reg(bmp280_spi_dev, BMP280_CTRLMEAS_REG);
+    // rt_kprintf("CTRL_MEAS: 0x%02X\r\n", ctrl_meas);
+
     spi_write_reg(bmp280_spi_dev, BMP280_CONFIG_REG, Config_reg);
+    // uint8_t config = spi_read_reg(bmp280_spi_dev, BMP280_CONFIG_REG);
+    // rt_kprintf("CONFIG_REG: 0x%02X\r\n", config);
+
     rt_thread_mdelay(20);
 
     Dig_T1 = bmp280_read_2regs(BMP280_DIG_T1_LSB_REG);
@@ -143,12 +167,15 @@ static void bmp280_init(baroDev_t *baro)
     Dig_P7 = bmp280_read_2regs(BMP280_DIG_P7_LSB_REG);
     Dig_P8 = bmp280_read_2regs(BMP280_DIG_P8_LSB_REG);
     Dig_P9 = bmp280_read_2regs(BMP280_DIG_P9_LSB_REG);
+
+    return true;
 }
 
 /**
- * @brief 探测bmp280的id
+ * @brief 探测bmp280的id是否正确
+ * @return true-检测成功，false-检测失败
  */
-int32_t bmp280_detect(void)
+static bool bmp280_detect(void)
 {
 
     rt_thread_mdelay(1); // 上电延时
@@ -165,17 +192,29 @@ int32_t bmp280_detect(void)
     }
     return false;
 }
-
 /**
  * @brief 获取BMP280温度值（官方校准算法）
  * @return 温度值（单位：0.01℃）
  */
 bool BMP280_GetTemp(baroDev_t *baro)
 {
-    int32_t var1, var2, T;
-    int32_t adc_T = bmp280_read_3regs(BMP280_TEMPERATURE_MSB_REG);
+    if (baro == NULL)
+        return false;
 
-    // 官方温度校准公式
+    // 在读取数据前检查测量状态
+    uint8_t status = spi_read_reg(bmp280_spi_dev, BMP280_STATUS_REG);
+    if (status & 0x08)
+    { // 检查测量是否完成
+        rt_kprintf("Measurement not ready\r\n");
+        return false;
+    }
+
+    int32_t adc_T = bmp280_read_3regs(BMP280_TEMPERATURE_MSB_REG);
+    if (adc_T < 0)
+        return false; // 读取失败
+
+    // 官方温度校准公式（保持不变）
+    int32_t var1, var2, T;
     var1 = ((((adc_T >> 3) - ((int32_t)Dig_T1 << 1))) * ((int32_t)Dig_T2)) >> 11;
     var2 = (((((adc_T >> 4) - ((int32_t)Dig_T1)) * ((adc_T >> 4) - ((int32_t)Dig_T1))) >> 12) *
             ((int32_t)Dig_T3)) >>
@@ -194,16 +233,23 @@ bool BMP280_GetTemp(baroDev_t *baro)
  */
 bool BMP280_GetPress(baroDev_t *baro)
 {
-    int64_t var1, var2, p;
-    int32_t adc_P = bmp280_read_3regs(BMP280_PRESSURE_MSB_REG);
+    if (baro == NULL)
+        return false;
 
     // 必须先读取温度，保证t_fine有效
-    if (t_fine == 0)
+    if (!BMP280_GetTemp(baro) || t_fine == 0)
     {
-        BMP280_GetTemp(baro);
+        rt_kprintf("Read temperature first failed!\n");
+        return false;
     }
 
-    // 官方压力校准公式
+    int32_t adc_P = bmp280_read_3regs(BMP280_PRESSURE_MSB_REG);
+    rt_kprintf("adc_P:%d\r\n", adc_P);
+    if (adc_P < 0)
+        return false; // 读取失败
+
+    // 官方压力校准公式（保持不变）
+    int64_t var1, var2, p;
     var1 = ((int64_t)t_fine) - 128000;
     var2 = var1 * var1 * (int64_t)Dig_P6;
     var2 = var2 + ((var1 * (int64_t)Dig_P5) << 17);
@@ -214,6 +260,7 @@ bool BMP280_GetPress(baroDev_t *baro)
     // 避免除零错误
     if (var1 == 0)
     {
+        rt_kprintf("var1 is zero, pressure calculate failed!\n");
         return false;
     }
 
@@ -224,10 +271,19 @@ bool BMP280_GetPress(baroDev_t *baro)
 
     p = ((p + var1 + var2) >> 8) + (((int64_t)Dig_P7) << 4);
 
-    baro->press = (uint32_t)p;
+    char press[64];
+    // sprintf(press, "Pressure out of range: %lld Pa\n", p);
+    // rt_kprintf("%s", press);
+    // // 压力值范围校验（正常大气压约 80000 ~ 110000 Pa）
+    // if (p < 30000 || p > 110000)
+    // {
+    //     baro->pressure = 0;
+    //     return false;
+    // }
+
+    baro->pressure = (uint32_t)p;
     return true;
 }
-
 /**
  * @brief 根据气压计算海拔高度（补充实现）
  * @param pressure 气压值（Pa）

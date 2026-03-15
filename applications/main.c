@@ -11,10 +11,11 @@
 
 /* defined the led1 pin: pc2 */
 #define LED1_PIN GET_PIN(C, 2)
+int32_t BMP280_GetAltitude(uint32_t pressure, uint32_t seaLevelPressure);
 
 int main(void)
 {
-    rt_uint32_t speed = 200;
+    rt_uint32_t speed = 500;
     /* set led2 pin mode to output */
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
 
@@ -23,7 +24,8 @@ int main(void)
     while (1)
     {
         g_bmp280_baro.read_press(&g_bmp280_baro);
-        rt_kprintf("press: %d\n", g_bmp280_baro.press);
+        int32_t altitude = BMP280_GetAltitude(g_bmp280_baro.pressure, 101325);
+        rt_kprintf("press: %d, altitude: %d, temp: %d\n", g_bmp280_baro.pressure, altitude, g_bmp280_baro.temp);
 
         rt_pin_write(LED1_PIN, PIN_LOW);
         rt_thread_mdelay(speed);

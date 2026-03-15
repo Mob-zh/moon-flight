@@ -6,9 +6,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "at32f435_437_spi.h"
-#include "at32f435_437_wk_config.h"
 #include "drv_gpio.h"
+#include "drv_spi.h"
 #include "rtthread.h"
 
 /************************ 硬件相关定义 ************************/
@@ -58,8 +57,9 @@ struct baroDev_s
 {
     // 基础配置
     uint32_t pressure;
-    int32_t  Altitude;
-    uint8_t  ID; // 定义用于存放ID号的变量
+    uint32_t temp;
+
+    uint8_t ID; // 定义用于存放ID号的变量
 
     // 函数指针
     bool (*init)(baroDev_t *);
