@@ -26,11 +26,88 @@
             <ModeSub name="Time_Base" value="SysTick"/>
         </Mode>
     </SYSTEM>
+    <TMR3>
+        <Mode>
+            <ModeSub name="Channel1 mode" value="Output_CH1"/>
+            <ModeSub name="Channel2 mode" value="Output_CH2"/>
+            <ModeSub name="Activated" value="TRUE"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="DividerValue" value="1"/>
+            <ParametersSub name="Period" value="239"/>
+            <ParametersSub name="OCMode_2" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
+            <ParametersSub name="OC2Buffer" value="TRUE"/>
+            <ParametersSub name="OCMode_1" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
+            <ParametersSub name="OC1Buffer" value="TRUE"/>
+        </Parameters>
+    </TMR3>
+    <TMR4>
+        <Mode>
+            <ModeSub name="Channel1 mode" value="Output_CH1"/>
+            <ModeSub name="Channel2 mode" value="Output_CH2"/>
+            <ModeSub name="Activated" value="TRUE"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="DividerValue" value="1"/>
+            <ParametersSub name="Period" value="239"/>
+            <ParametersSub name="OCMode_1" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
+            <ParametersSub name="OC1Buffer" value="TRUE"/>
+            <ParametersSub name="OCMode_2" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
+            <ParametersSub name="OC2Buffer" value="TRUE"/>
+        </Parameters>
+    </TMR4>
+    <DMA>
+        <TMR3_CH1>
+            <ParametersSub name="Instance" value="DMA1_Channel2"/>
+            <ParametersSub name="Mode" value="TRUE"/>
+            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+        </TMR3_CH1>
+        <TMR3_CH2>
+            <ParametersSub name="Instance" value="DMA1_Channel1"/>
+            <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
+            <ParametersSub name="Mode" value="TRUE"/>
+            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+        </TMR3_CH2>
+        <TMR4_CH1>
+            <ParametersSub name="Instance" value="DMA1_Channel3"/>
+            <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
+            <ParametersSub name="Mode" value="TRUE"/>
+            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+        </TMR4_CH1>
+        <TMR4_CH2>
+            <ParametersSub name="Instance" value="DMA1_Channel4"/>
+            <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
+            <ParametersSub name="Mode" value="TRUE"/>
+            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+        </TMR4_CH2>
+    </DMA>
     <NVIC>
         <SysTick_Handler>1;15;0;0;0</SysTick_Handler>
         <FLASH_IRQHandler>0;0;0;0;0</FLASH_IRQHandler>
         <CRM_IRQHandler>0;0;0;0;0</CRM_IRQHandler>
+        <TMR3_GLOBAL_IRQHandler>0;0;0;0;0</TMR3_GLOBAL_IRQHandler>
+        <TMR4_GLOBAL_IRQHandler>0;0;0;0;0</TMR4_GLOBAL_IRQHandler>
+        <DMA1_Channel1_IRQHandler>0;0;0;0;0</DMA1_Channel1_IRQHandler>
+        <DMA1_Channel2_IRQHandler>0;0;0;0;0</DMA1_Channel2_IRQHandler>
+        <DMA1_Channel3_IRQHandler>0;0;0;0;0</DMA1_Channel3_IRQHandler>
+        <DMA1_Channel4_IRQHandler>0;0;0;0;0</DMA1_Channel4_IRQHandler>
         <FPU_IRQHandler>0;0;0;0;0</FPU_IRQHandler>
+        <DMAMUX_IRQHandler>0;0;0;0;0</DMAMUX_IRQHandler>
     </NVIC>
     <ClockConfiguration>
         <rtcsel>0</rtcsel>
@@ -60,6 +137,10 @@
         <PinSub pinname="PH1/HEXT_OUT" signalname="CRM_HEXT_OUT" signaltype="2"/>
         <PinSub pinname="PA13" signalname="DEBUG_JTMS_SWDIO" signaltype="2"/>
         <PinSub pinname="PA14" signalname="DEBUG_JTCK_SWCLK" signaltype="2"/>
+        <PinSub pinname="PB4" signalname="TMR3_CH1" signaltype="3"/>
+        <PinSub pinname="PB5" signalname="TMR3_CH2" signaltype="2"/>
+        <PinSub pinname="PB6" signalname="TMR4_CH1" signaltype="2"/>
+        <PinSub pinname="PB7" signalname="TMR4_CH2" signaltype="2"/>
     </PINInfo>
     <ProjectInfomation>
         <ProjectName>WorkBench_Config</ProjectName>

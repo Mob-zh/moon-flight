@@ -8,12 +8,16 @@ cwd = GetCurrentDir()
 src = Glob(os.path.join(cwd, 'accgyro', '*.c'))
 src += Glob(os.path.join(cwd, 'baro', '*.c'))
 src += Glob(os.path.join(cwd, 'spi_dev', '*.c'))
+src += Glob(os.path.join(cwd, 'motor', '*.c'))
+src += Glob(os.path.join(cwd, 'dshot', '*.c'))
 
 path = [
     cwd,                # 当前目录
     os.path.join(cwd, 'accgyro'),  # accgyro头文件目录
     os.path.join(cwd, 'baro'),  # baro头文件目录
-    os.path.join(cwd, 'spi_dev')  # spi_dev头文件目录
+    os.path.join(cwd, 'spi_dev'),  # spi_dev头文件目录
+    os.path.join(cwd, 'motor'),  # motor头文件目录
+    os.path.join(cwd, 'dshot')  # dshot头文件目录
 ]
 
 group = DefineGroup('driver', src, depend = [''], CPPPATH = path)
