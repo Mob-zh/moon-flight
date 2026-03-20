@@ -12,7 +12,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "at32f435_437.h"
-
+#include "stdbool.h"
 /* Exported defines ----------------------------------------------------------*/
 // DShot600 核心参数（适配144MHz主频，RT-Thread配置）
 #define DSHOT600_TIMER     TMR3       // 使用TIM3作为DShot600定时器
@@ -31,11 +31,12 @@
 #define DSHOT_THROTTLE_MAX  2047U // 最大油门值
 
 // DMA配置（多通道支持）
-#define DSHOT_DMA_CHANNEL_1   DMA1_CHANNEL1
-#define DSHOT_DMA_CHANNEL_2   DMA1_CHANNEL2
-#define DSHOT_DMA_CHANNEL_3   DMA1_CHANNEL3
-#define DSHOT_DMA_CHANNEL_4   DMA1_CHANNEL4
-#define DSHOT_DMA_BUFFER_SIZE (DSHOT_PACKET_LENGTH) // DMA缓冲区长度=16
+#define DSHOT_DMA_CHANNEL_1           DMA1_CHANNEL3
+#define DSHOT_DMA_CHANNEL_2           DMA1_CHANNEL4
+#define DSHOT_DMA_CHANNEL_3           DMA1_CHANNEL5
+#define DSHOT_DMA_CHANNEL_4           DMA1_CHANNEL6
+#define DSHOT_DMA_BUFFER_SIZE         (DSHOT_PACKET_LENGTH)     // DMA缓冲区长度=16 (16位数据)
+#define DSHOT_BITBANG_DMA_BUFFER_SIZE (DSHOT_PACKET_LENGTH + 1) // DMA缓冲区长度=18 (16位数据 + 2位帧间隔)
 
 // 定时器通道配置
 #define DSHOT_TMR3_CH1_CCR (&TMR3->c1dt)
@@ -78,6 +79,12 @@
 #define DSHOT_THROTTLE_MIN_POWER 48   // 最小动力输出
 #define DSHOT_THROTTLE_MAX_POWER 2047 // 最大动力输出
 
+// DMA事件定义
+#define DSHOT1_DMA_FDT_EVENT (1 << 0)
+#define DSHOT2_DMA_FDT_EVENT (1 << 1)
+#define DSHOT3_DMA_FDT_EVENT (1 << 2)
+#define DSHOT4_DMA_FDT_EVENT (1 << 3)
+
 /* Exported types ------------------------------------------------------------*/
 typedef enum
 {
@@ -90,7 +97,7 @@ typedef enum
 
 /* Exported functions prototypes ---------------------------------------------*/
 // DShot600初始化（定时器+DMA）
-void dshot600_init(void);
+bool dshot600_init(void);
 
 // 构建DShot数据包（含校验和）
 uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry);

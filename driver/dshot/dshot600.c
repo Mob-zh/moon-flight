@@ -9,19 +9,23 @@
 #include "dshot600.h"
 #include "at32f435_437.h"
 #include "at32f435_437_crm.h"
+#include "at32f435_437_dma.h"
 #include "at32f435_437_wk_config.h"
 #include <rtdbg.h>
 #include <rtthread.h>
+#include <string.h>
 
 /* Private variables ---------------------------------------------------------*/
 // DMA缓冲区（4通道独立缓冲区）
-static uint16_t dshot_dma_buffer[DSHOT_CHANNEL_MAX][DSHOT_DMA_BUFFER_SIZE] = {0};
+static uint16_t dshot_dma_buffer[DSHOT_CHANNEL_MAX][DSHOT_BITBANG_DMA_BUFFER_SIZE] = {0};
 // 渐变油门测试变量
 static uint16_t test_throttle = DSHOT_THROTTLE_MIN;
 static uint8_t  throttle_step = 1;
 // 通道状态变量
 static uint16_t channel_throttle[DSHOT_CHANNEL_MAX]  = {DSHOT_THROTTLE_MIN};
 static uint8_t  channel_telemetry[DSHOT_CHANNEL_MAX] = {0};
+
+rt_event_t dshot_event;
 
 /* Private functions prototypes ---------------------------------------------*/
 // 计算DShot数据包校验和
@@ -43,21 +47,23 @@ static uint8_t dshot600_calc_checksum(uint16_t packet)
  * @param  无
  * @retval 无
  */
-void dshot600_init(void)
+bool dshot600_init(void)
 {
-    // 调试：打印实际时钟频率
-    crm_clocks_freq_type clocks;
-    crm_clocks_freq_get(&clocks);
-    LOG_I("DShot600 Init - APB1 freq: %d, APB2 freq: %d", clocks.apb1_freq, clocks.apb2_freq);
-    LOG_I("DShot600 Config - Timer CLK: %d, ARR: %d, PSC: %d",
-          DSHOT600_TIMER_CLK, DSHOT600_ARR, DSHOT600_PSC);
+
+    dshot_event = rt_event_create("dshot_event", RT_IPC_FLAG_PRIO);
+    if (dshot_event == RT_NULL)
+    {
+        LOG_E("dshot_event create failed");
+        return false;
+    }
 
     // 初始化DMA缓冲区
+    // 默认填充逻辑0（低电平），确保空闲状态正确
     for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
     {
         for (uint8_t i = 0; i < DSHOT_DMA_BUFFER_SIZE; i++)
         {
-            dshot_dma_buffer[ch][i] = DSHOT600_BIT_0_CCR; // 默认填充逻辑0
+            dshot_dma_buffer[ch][i] = DSHOT600_BIT_0_CCR; // 默认填充逻辑0（空闲状态）
         }
     }
 
@@ -73,42 +79,46 @@ void dshot600_init(void)
     // 5. 确保GPIOB时钟使能
     crm_periph_clock_enable(CRM_GPIOB_PERIPH_CLOCK, TRUE);
 
+    nvic_irq_enable(DMA1_Channel3_IRQn, 0, 0);
+    nvic_irq_enable(DMA1_Channel4_IRQn, 0, 0);
+    nvic_irq_enable(DMA1_Channel5_IRQn, 0, 0);
+    nvic_irq_enable(DMA1_Channel6_IRQn, 0, 0);
     rt_thread_mdelay(100);
 
     // 配置并启用DMA通道1（TMR3_CH1）
-    wk_dma1_channel1_init();
-    wk_dma1_channel2_init();
+
     wk_dma1_channel3_init();
     wk_dma1_channel4_init();
-
-    rt_thread_mdelay(100);
+    wk_dma1_channel5_init();
+    wk_dma1_channel6_init();
 
     wk_dma_channel_config(DSHOT_DMA_CHANNEL_1,
                           (uint32_t)DSHOT_TMR3_CH1_CCR,
                           (uint32_t)dshot_dma_buffer[0],
-                          DSHOT_DMA_BUFFER_SIZE);
+                          DSHOT_BITBANG_DMA_BUFFER_SIZE);
     dma_channel_enable(DSHOT_DMA_CHANNEL_1, TRUE);
 
     wk_dma_channel_config(DSHOT_DMA_CHANNEL_2,
                           (uint32_t)DSHOT_TMR3_CH2_CCR,
                           (uint32_t)dshot_dma_buffer[1],
-                          DSHOT_DMA_BUFFER_SIZE);
+                          DSHOT_BITBANG_DMA_BUFFER_SIZE);
     dma_channel_enable(DSHOT_DMA_CHANNEL_2, TRUE);
 
     wk_dma_channel_config(DSHOT_DMA_CHANNEL_3,
                           (uint32_t)DSHOT_TMR4_CH1_CCR,
                           (uint32_t)dshot_dma_buffer[2],
-                          DSHOT_DMA_BUFFER_SIZE);
+                          DSHOT_BITBANG_DMA_BUFFER_SIZE);
     dma_channel_enable(DSHOT_DMA_CHANNEL_3, TRUE);
 
     wk_dma_channel_config(DSHOT_DMA_CHANNEL_4,
                           (uint32_t)DSHOT_TMR4_CH2_CCR,
                           (uint32_t)dshot_dma_buffer[3],
-                          DSHOT_DMA_BUFFER_SIZE);
+                          DSHOT_BITBANG_DMA_BUFFER_SIZE);
     dma_channel_enable(DSHOT_DMA_CHANNEL_4, TRUE);
 
     wk_tmr3_init();
     wk_tmr4_init();
+    return true;
 }
 
 /**
@@ -142,7 +152,8 @@ uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry)
     uint16_t packet = (packet_value << 1) | (telemetry ? 1 : 0);
     // 添加4bit校验和
     uint8_t checksum = dshot600_calc_checksum(packet);
-    packet           = (packet << 4) | checksum;
+
+    packet = (packet << 4) | checksum;
 
     return packet;
 }
@@ -152,10 +163,15 @@ uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry)
  * @param  dma_buf: DMA缓冲区指针
  * @param  packet: DShot数据包
  * @retval 无
+ *
+ * 根据betaflight实现，添加帧间隔位以避免CRC错误：
+ * - 填充16位DShot数据
+ * - 添加2位间隔位保持线路在空闲状态（低电平）
+ * - 确保ESC能正确采样最后的bit
  */
 void dshot600_fill_dma_buffer(uint16_t *dma_buf, uint16_t packet)
 {
-    // 按位填充（MSB先行）
+    // 按位填充16位DShot数据（MSB先行）
     for (uint8_t i = 0; i < DSHOT_PACKET_LENGTH; i++)
     {
         if (packet & (0x8000 >> i))
@@ -167,23 +183,11 @@ void dshot600_fill_dma_buffer(uint16_t *dma_buf, uint16_t packet)
             dma_buf[i] = DSHOT600_BIT_0_CCR; // 逻辑0
         }
     }
-    // dma_buf[0] = DSHOT600_BIT_0_CCR; // 逻辑0
-    // dma_buf[1] = DSHOT600_BIT_0_CCR; // 逻辑0
-    // dma_buf[2] = DSHOT600_BIT_0_CCR; // 逻辑0
-    // dma_buf[3] = DSHOT600_BIT_0_CCR; // 逻辑0
-    // dma_buf[4] = DSHOT600_BIT_0_CCR; // 逻辑0
-    // dma_buf[5] = DSHOT600_BIT_0_CCR; // 逻辑1
-    // dma_buf[6] = DSHOT600_BIT_0_CCR; // 逻辑1
-    // dma_buf[7] = DSHOT600_BIT_0_CCR; // 逻辑1
 
-    // dma_buf[8]  = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[9]  = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[10] = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[11] = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[12] = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[13] = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[14] = DSHOT600_BIT_1_CCR; // 逻辑1
-    // dma_buf[15] = DSHOT600_BIT_1_CCR; // 逻辑1
+    // 添加帧间隔位 - 保持线路在空闲状态（低电平）
+    // 这可以避免双向DShot的CRC错误
+    dma_buf[16] = DSHOT600_BIT_0_CCR; // 额外的bit保持低电平
+    dma_buf[17] = DSHOT600_BIT_0_CCR; // 确保ESC能正确采样最后的bit
 }
 
 /**
@@ -206,61 +210,52 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
     dshot600_fill_dma_buffer(dshot_dma_buffer[channel], packet);
 
     // 3. 根据通道选择对应的DMA和定时器寄存器
+    // 在Normal模式下，需要先禁用DMA通道，重新配置后再启用
+    rt_uint32_t e;
     switch (channel)
     {
     case DSHOT_CHANNEL_1:
-        dma_channel_enable(DMA1_CHANNEL1, FALSE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_1, FALSE); // 先禁用
+        // rt_event_recv(dshot_event, DSHOT1_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_1,
                               (uint32_t)DSHOT_TMR3_CH1_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
-                              DSHOT_DMA_BUFFER_SIZE);
-        dma_channel_enable(DMA1_CHANNEL1, TRUE);
+                              DSHOT_BITBANG_DMA_BUFFER_SIZE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_1, TRUE); // 重新启用
         break;
 
     case DSHOT_CHANNEL_2:
-        dma_channel_enable(DMA1_CHANNEL2, FALSE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_2, FALSE); // 先禁用
+        // rt_event_recv(dshot_event, DSHOT2_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_2,
                               (uint32_t)DSHOT_TMR3_CH2_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
-                              DSHOT_DMA_BUFFER_SIZE);
-        dma_channel_enable(DMA1_CHANNEL2, TRUE);
+                              DSHOT_BITBANG_DMA_BUFFER_SIZE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_2, TRUE); // 重新启用
         break;
 
     case DSHOT_CHANNEL_3:
-        dma_channel_enable(DMA1_CHANNEL3, FALSE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_3, FALSE); // 先禁用
+        // rt_event_recv(dshot_event, DSHOT3_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_3,
                               (uint32_t)DSHOT_TMR4_CH1_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
-                              DSHOT_DMA_BUFFER_SIZE);
-        dma_channel_enable(DMA1_CHANNEL3, TRUE);
+                              DSHOT_BITBANG_DMA_BUFFER_SIZE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_3, TRUE); // 重新启用
         break;
 
     case DSHOT_CHANNEL_4:
-        dma_channel_enable(DMA1_CHANNEL4, FALSE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_4, FALSE); // 先禁用
+        // rt_event_recv(dshot_event, DSHOT4_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_4,
                               (uint32_t)DSHOT_TMR4_CH2_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
-                              DSHOT_DMA_BUFFER_SIZE);
-        dma_channel_enable(DMA1_CHANNEL4, TRUE);
+                              DSHOT_BITBANG_DMA_BUFFER_SIZE);
+        dma_channel_enable(DSHOT_DMA_CHANNEL_4, TRUE); // 重新启用
         break;
 
     default:
         break;
-    }
-}
-
-/**
- * @brief  测试函数：发送固定油门值
- * @param  channel: 通道号
- * @param  throttle: 固定油门值
- * @retval 无
- */
-void dshot600_test_send_fixed_throttle(dshot_channel_e channel, uint16_t throttle)
-{
-    while (1)
-    {
-        dshot600_send_packet(channel, throttle);
-        rt_thread_mdelay(10); // 10ms发送一次（可调整频率）
     }
 }
 
@@ -311,7 +306,7 @@ void dshot600_motor_stop(dshot_channel_e channel)
  * @param  beep_type: 鸣叫类型(1-5)
  * @retval 无
  */
-void dshot600_beep_test(dshot_channel_e channel, uint8_t beep_type)
+void dshot600_beeper(dshot_channel_e channel, uint8_t beep_type)
 {
     if (beep_type < 1 || beep_type > 5)
         return;
@@ -371,87 +366,122 @@ void dshot600_test_gradient_throttle(dshot_channel_e channel)
     // rt_thread_mdelay(5); // 渐变速度控制
 }
 
-/**
- * @brief  测试函数：多通道同步测试
- * @retval 无
- */
-void dshot600_test_multi_channel(void)
+void dshot600_set_throttle(int argc, char **argv)
 {
-    static uint8_t test_phase = 0;
-
-    switch (test_phase)
+    if (argc < 2)
     {
-    case 0:
-        // 所有通道停止
-        for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
-        {
-            dshot600_motor_stop((dshot_channel_e)ch);
-        }
-        break;
-
-    case 1:
-        // 通道1-4依次鸣叫
-        dshot600_beep_test(DSHOT_CHANNEL_1, 1);
-        break;
-
-    case 2:
-        dshot600_beep_test(DSHOT_CHANNEL_2, 2);
-        break;
-
-    case 3:
-        dshot600_beep_test(DSHOT_CHANNEL_3, 3);
-        break;
-
-    case 4:
-        dshot600_beep_test(DSHOT_CHANNEL_4, 4);
-        break;
-
-    case 5:
-        // 所有通道同步油门测试
-        for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
-        {
-            dshot600_send_throttle((dshot_channel_e)ch, 1000 + ch * 100);
-        }
-        break;
+        rt_kprintf("Usage:\n");
+        rt_kprintf("  set_throttle <throttle> - Set throttle to n%% (0-100)\n");
+        return;
     }
 
-    test_phase = (test_phase + 1) % 6;
+    int throttle = atoi(argv[1]);
+    dshot600_send_throttle(DSHOT_CHANNEL_1, throttle);
+}
+MSH_CMD_EXPORT(dshot600_set_throttle, Set throttle to n % % (0 - 100));
+
+/* 持续发送测试变量 */
+static uint8_t         g_dshot_run_enable   = 0;
+static uint16_t        g_dshot_run_throttle = 0;
+static dshot_channel_e g_dshot_run_channel  = DSHOT_CHANNEL_1;
+
+/**
+ * @brief  停止持续发送
+ */
+void dshot600_run_stop(void)
+{
+    g_dshot_run_enable = 0;
 }
 
 /**
- * @brief  测试函数：命令发送测试
- * @param  channel: 通道号
- * @retval 无
+ * @brief  持续发送任务
  */
-void dshot600_test_commands(dshot_channel_e channel)
+static void dshot_run_task(void *parameter)
 {
-    static uint8_t  cmd_index = 0;
-    static uint32_t last_time = 0;
+    LOG_I("DShot run: channel=%d, throttle=%d", g_dshot_run_channel, g_dshot_run_throttle);
 
-    switch (cmd_index)
+    while (g_dshot_run_enable)
     {
-    case 0:
-        dshot600_beep_test(channel, 1);
-        break;
-    case 1:
-        dshot600_beep_test(channel, 2);
-        break;
-    case 2:
-        dshot600_led_control(channel, 1, 1);
-        break;
-    case 3:
-        dshot600_led_control(channel, 1, 0);
-        break;
-    case 4:
-        dshot600_set_rotation_direction(channel, 1);
-        break;
-    case 5:
-        dshot600_set_rotation_direction(channel, 2);
-        break;
-    default:
-        dshot600_motor_stop(channel);
-        break;
+        dshot600_send_throttle(g_dshot_run_channel, g_dshot_run_throttle);
     }
 
-    cmd_index = (cmd_index + 1) % 6;
+    LOG_I("DShot run stopped");
 }
+
+/**
+ * @brief  dshot_run 命令 - 持续发送油门
+ * 用法: dshot_run <channel> <throttle>
+ *       channel: 0-3, throttle: 48-2047
+ *       dshot_stop 停止
+ */
+static void dshot_run_cmd(int argc, char **argv)
+{
+    if (argc < 3)
+    {
+        rt_kprintf("Usage: dshot_run <channel> <throttle>\n");
+        rt_kprintf("  channel: 0-3 (M1-M4)\n");
+        rt_kprintf("  throttle: 48-2047 (建议 100-500 测试)\n");
+        rt_kprintf("Example: dshot_run 0 200\n");
+        return;
+    }
+
+    uint8_t  channel  = atoi(argv[1]);
+    uint16_t throttle = atoi(argv[2]);
+
+    if (channel >= DSHOT_CHANNEL_MAX)
+    {
+        rt_kprintf("Error: channel must be 0-3\n");
+        return;
+    }
+
+    if (throttle < DSHOT_THROTTLE_MIN_POWER || throttle > DSHOT_THROTTLE_MAX)
+    {
+        rt_kprintf("Error: throttle must be %d-%d\n", DSHOT_THROTTLE_MIN_POWER, DSHOT_THROTTLE_MAX);
+        return;
+    }
+
+    // 如果已经在运行，先停止
+    if (g_dshot_run_enable)
+    {
+        g_dshot_run_enable = 0;
+        rt_thread_mdelay(20);
+    }
+
+    g_dshot_run_channel  = (dshot_channel_e)channel;
+    g_dshot_run_throttle = throttle;
+    g_dshot_run_enable   = 1;
+
+    // 创建线程持续发送
+    rt_thread_t tid = rt_thread_create("dshot_run",
+                                       dshot_run_task,
+                                       RT_NULL,
+                                       2048,
+                                       15,
+                                       10);
+    if (tid)
+    {
+        rt_thread_startup(tid);
+        rt_kprintf("DShot run started: channel=%d, throttle=%d\n", channel, throttle);
+    }
+    else
+    {
+        rt_kprintf("Failed to create dshot_run thread\n");
+    }
+}
+MSH_CMD_EXPORT(dshot_run_cmd, dshot_run<channel><throttle> - Continuous throttle test);
+
+/**
+ * @brief  dshot_stop 命令 - 停止持续发送
+ */
+static void dshot_stop_cmd(int argc, char **argv)
+{
+    dshot600_run_stop();
+    rt_kprintf("DShot stopped\n");
+
+    // 发送停止命令到所有通道
+    for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
+    {
+        dshot600_motor_stop((dshot_channel_e)ch);
+    }
+}
+MSH_CMD_EXPORT(dshot_stop_cmd, dshot_stop - Stop continuous throttle);

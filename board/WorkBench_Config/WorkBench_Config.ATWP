@@ -58,42 +58,44 @@
     </TMR4>
     <DMA>
         <TMR3_CH1>
-            <ParametersSub name="Instance" value="DMA1_Channel2"/>
-            <ParametersSub name="Mode" value="TRUE"/>
-            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
-            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
-            <ParametersSub name="SyncRequestCount" value="1"/>
-            <ParametersSub name="RequestCount" value="1"/>
-        </TMR3_CH1>
-        <TMR3_CH2>
-            <ParametersSub name="Instance" value="DMA1_Channel1"/>
-            <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
-            <ParametersSub name="Mode" value="TRUE"/>
-            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
-            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
-            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
-            <ParametersSub name="SyncRequestCount" value="1"/>
-            <ParametersSub name="RequestCount" value="1"/>
-        </TMR3_CH2>
-        <TMR4_CH1>
             <ParametersSub name="Instance" value="DMA1_Channel3"/>
             <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
-            <ParametersSub name="Mode" value="TRUE"/>
             <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
             <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
             <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
             <ParametersSub name="SyncRequestCount" value="1"/>
             <ParametersSub name="RequestCount" value="1"/>
-        </TMR4_CH1>
-        <TMR4_CH2>
+            <ParametersSub name="Interrupt_FDT" value="ENABLE"/>
+        </TMR3_CH1>
+        <TMR3_CH2>
             <ParametersSub name="Instance" value="DMA1_Channel4"/>
             <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
-            <ParametersSub name="Mode" value="TRUE"/>
             <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
             <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
             <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
             <ParametersSub name="SyncRequestCount" value="1"/>
             <ParametersSub name="RequestCount" value="1"/>
+            <ParametersSub name="Interrupt_FDT" value="ENABLE"/>
+        </TMR3_CH2>
+        <TMR4_CH1>
+            <ParametersSub name="Instance" value="DMA1_Channel5"/>
+            <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
+            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+            <ParametersSub name="Interrupt_FDT" value="ENABLE"/>
+        </TMR4_CH1>
+        <TMR4_CH2>
+            <ParametersSub name="Instance" value="DMA1_Channel6"/>
+            <ParametersSub name="Direction" value="DMA_DIR_MEMORY_TO_PERIPHERAL"/>
+            <ParametersSub name="PeriphDataAlignment" value="DMA_PERIPHERAL_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="MemDataAlignment" value="DMA_MEMORY_DATA_WIDTH_HALFWORD"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+            <ParametersSub name="Interrupt_FDT" value="ENABLE"/>
         </TMR4_CH2>
     </DMA>
     <NVIC>
@@ -102,10 +104,10 @@
         <CRM_IRQHandler>0;0;0;0;0</CRM_IRQHandler>
         <TMR3_GLOBAL_IRQHandler>0;0;0;0;0</TMR3_GLOBAL_IRQHandler>
         <TMR4_GLOBAL_IRQHandler>0;0;0;0;0</TMR4_GLOBAL_IRQHandler>
-        <DMA1_Channel1_IRQHandler>0;0;0;0;0</DMA1_Channel1_IRQHandler>
-        <DMA1_Channel2_IRQHandler>0;0;0;0;0</DMA1_Channel2_IRQHandler>
-        <DMA1_Channel3_IRQHandler>0;0;0;0;0</DMA1_Channel3_IRQHandler>
-        <DMA1_Channel4_IRQHandler>0;0;0;0;0</DMA1_Channel4_IRQHandler>
+        <DMA1_Channel3_IRQHandler>1;0;0;0;0</DMA1_Channel3_IRQHandler>
+        <DMA1_Channel4_IRQHandler>1;0;0;0;0</DMA1_Channel4_IRQHandler>
+        <DMA1_Channel5_IRQHandler>1;0;0;0;0</DMA1_Channel5_IRQHandler>
+        <DMA1_Channel6_IRQHandler>1;0;0;0;0</DMA1_Channel6_IRQHandler>
         <FPU_IRQHandler>0;0;0;0;0</FPU_IRQHandler>
         <DMAMUX_IRQHandler>0;0;0;0;0</DMAMUX_IRQHandler>
     </NVIC>

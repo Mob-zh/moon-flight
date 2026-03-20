@@ -1,27 +1,27 @@
 /* add user code begin Header */
 /**
-  **************************************************************************
-  * @file     at32f435_437_wk_config.h
-  * @brief    header file of work bench config
-  **************************************************************************
-  *                       Copyright notice & Disclaimer
-  *
-  * The software Board Support Package (BSP) that is made available to
-  * download from Artery official website is the copyrighted work of Artery.
-  * Artery authorizes customers to use, copy, and distribute the BSP
-  * software and its related documentation for the purpose of design and
-  * development in conjunction with Artery microcontrollers. Use of the
-  * software is governed by this copyright notice and the following disclaimer.
-  *
-  * THIS SOFTWARE IS PROVIDED ON "AS IS" BASIS WITHOUT WARRANTIES,
-  * GUARANTEES OR REPRESENTATIONS OF ANY KIND. ARTERY EXPRESSLY DISCLAIMS,
-  * TO THE FULLEST EXTENT PERMITTED BY LAW, ALL EXPRESS, IMPLIED OR
-  * STATUTORY OR OTHER WARRANTIES, GUARANTEES OR REPRESENTATIONS,
-  * INCLUDING BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY,
-  * FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
-  *
-  **************************************************************************
-  */
+ **************************************************************************
+ * @file     at32f435_437_wk_config.h
+ * @brief    header file of work bench config
+ **************************************************************************
+ *                       Copyright notice & Disclaimer
+ *
+ * The software Board Support Package (BSP) that is made available to
+ * download from Artery official website is the copyrighted work of Artery.
+ * Artery authorizes customers to use, copy, and distribute the BSP
+ * software and its related documentation for the purpose of design and
+ * development in conjunction with Artery microcontrollers. Use of the
+ * software is governed by this copyright notice and the following disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED ON "AS IS" BASIS WITHOUT WARRANTIES,
+ * GUARANTEES OR REPRESENTATIONS OF ANY KIND. ARTERY EXPRESSLY DISCLAIMS,
+ * TO THE FULLEST EXTENT PERMITTED BY LAW, ALL EXPRESS, IMPLIED OR
+ * STATUTORY OR OTHER WARRANTIES, GUARANTEES OR REPRESENTATIONS,
+ * INCLUDING BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
+ *
+ **************************************************************************
+ */
 /* add user code end Header */
 
 /* define to prevent recursive inclusion -----------------------------------*/
@@ -57,110 +57,110 @@ extern "C" {
 
 /* add user code begin dma define */
 /* user can only modify the dma define value */
-#define DMA1_CHANNEL1_BUFFER_SIZE   0
-#define DMA1_CHANNEL1_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL1_PERIPHERAL_BASE_ADDR  0
+//#define DMA1_CHANNEL1_BUFFER_SIZE      0
+//#define DMA1_CHANNEL1_MEMORY_BASE_ADDR 0
+    // #define DMA1_CHANNEL1_PERIPHERAL_BASE_ADDR  0
 
-#define DMA1_CHANNEL2_BUFFER_SIZE   0
-#define DMA1_CHANNEL2_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL2_PERIPHERAL_BASE_ADDR   0
+//#define DMA1_CHANNEL2_BUFFER_SIZE      0
+//#define DMA1_CHANNEL2_MEMORY_BASE_ADDR 0
+    // #define DMA1_CHANNEL2_PERIPHERAL_BASE_ADDR   0
 
-#define DMA1_CHANNEL3_BUFFER_SIZE   0
-#define DMA1_CHANNEL3_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL3_PERIPHERAL_BASE_ADDR   0
+#define DMA1_CHANNEL3_BUFFER_SIZE      0
+#define DMA1_CHANNEL3_MEMORY_BASE_ADDR 0
+    // #define DMA1_CHANNEL3_PERIPHERAL_BASE_ADDR   0
 
-#define DMA1_CHANNEL4_BUFFER_SIZE   0
-#define DMA1_CHANNEL4_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL4_PERIPHERAL_BASE_ADDR   0
+#define DMA1_CHANNEL4_BUFFER_SIZE      0
+#define DMA1_CHANNEL4_MEMORY_BASE_ADDR 0
+    // #define DMA1_CHANNEL4_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA1_CHANNEL5_BUFFER_SIZE   0
-//#define DMA1_CHANNEL5_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL5_PERIPHERAL_BASE_ADDR   0
+    #define DMA1_CHANNEL5_BUFFER_SIZE   0
+    #define DMA1_CHANNEL5_MEMORY_BASE_ADDR   0
+    // #define DMA1_CHANNEL5_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA1_CHANNEL6_BUFFER_SIZE   0
-//#define DMA1_CHANNEL6_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL6_PERIPHERAL_BASE_ADDR   0
+    #define DMA1_CHANNEL6_BUFFER_SIZE   0
+    #define DMA1_CHANNEL6_MEMORY_BASE_ADDR   0
+    // #define DMA1_CHANNEL6_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA1_CHANNEL7_BUFFER_SIZE   0
-//#define DMA1_CHANNEL7_MEMORY_BASE_ADDR   0
-//#define DMA1_CHANNEL7_PERIPHERAL_BASE_ADDR   0
+    // #define DMA1_CHANNEL7_BUFFER_SIZE   0
+    // #define DMA1_CHANNEL7_MEMORY_BASE_ADDR   0
+    // #define DMA1_CHANNEL7_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL1_BUFFER_SIZE   0
-//#define DMA2_CHANNEL1_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL1_PERIPHERAL_BASE_ADDR   0
+    // #define DMA2_CHANNEL1_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL1_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL1_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL2_BUFFER_SIZE   0
-//#define DMA2_CHANNEL2_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL2_PERIPHERAL_BASE_ADDR   0
+    // #define DMA2_CHANNEL2_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL2_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL2_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL3_BUFFER_SIZE   0
-//#define DMA2_CHANNEL3_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL3_PERIPHERAL_BASE_ADDR   0
+    // #define DMA2_CHANNEL3_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL3_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL3_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL4_BUFFER_SIZE   0
-//#define DMA2_CHANNEL4_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL4_PERIPHERAL_BASE_ADDR   0
+    // #define DMA2_CHANNEL4_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL4_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL4_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL5_BUFFER_SIZE   0
-//#define DMA2_CHANNEL5_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL5_PERIPHERAL_BASE_ADDR   0
+    // #define DMA2_CHANNEL5_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL5_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL5_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL6_BUFFER_SIZE   0
-//#define DMA2_CHANNEL6_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL6_PERIPHERAL_BASE_ADDR   0
+    // #define DMA2_CHANNEL6_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL6_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL6_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA2_CHANNEL7_BUFFER_SIZE   0
-//#define DMA2_CHANNEL7_MEMORY_BASE_ADDR   0
-//#define DMA2_CHANNEL7_PERIPHERAL_BASE_ADDR   0
- 
-//#define EDMA_STREAM1_BUFFER_SIZE   0
-//#define EDMA_STREAM1_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM1_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM1_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM1_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM2_BUFFER_SIZE   0
-//#define EDMA_STREAM2_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM2_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM2_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM2_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM3_BUFFER_SIZE   0
-//#define EDMA_STREAM3_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM3_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM3_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM3_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM4_BUFFER_SIZE   0
-//#define EDMA_STREAM4_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM4_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM4_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM4_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM5_BUFFER_SIZE   0
-//#define EDMA_STREAM5_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM5_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM5_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM5_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM6_BUFFER_SIZE   0
-//#define EDMA_STREAM6_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM6_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM6_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM6_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM7_BUFFER_SIZE   0
-//#define EDMA_STREAM7_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM7_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM7_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM7_LINK_LIST_POINTER   0
- 
-//#define EDMA_STREAM8_BUFFER_SIZE   0
-//#define EDMA_STREAM8_MEMORY0_BASE_ADDR   0
-//#define EDMA_STREAM8_PERIPHERAL_BASE_ADDR   0
-//#define EDMA_STREAM8_MEMORY1_BASE_ADDR   0
-//#define EDMA_STREAM8_LINK_LIST_POINTER   0
-/* add user code end dma define */
+    // #define DMA2_CHANNEL7_BUFFER_SIZE   0
+    // #define DMA2_CHANNEL7_MEMORY_BASE_ADDR   0
+    // #define DMA2_CHANNEL7_PERIPHERAL_BASE_ADDR   0
+
+    // #define EDMA_STREAM1_BUFFER_SIZE   0
+    // #define EDMA_STREAM1_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM1_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM1_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM1_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM2_BUFFER_SIZE   0
+    // #define EDMA_STREAM2_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM2_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM2_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM2_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM3_BUFFER_SIZE   0
+    // #define EDMA_STREAM3_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM3_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM3_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM3_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM4_BUFFER_SIZE   0
+    // #define EDMA_STREAM4_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM4_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM4_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM4_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM5_BUFFER_SIZE   0
+    // #define EDMA_STREAM5_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM5_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM5_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM5_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM6_BUFFER_SIZE   0
+    // #define EDMA_STREAM6_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM6_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM6_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM6_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM7_BUFFER_SIZE   0
+    // #define EDMA_STREAM7_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM7_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM7_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM7_LINK_LIST_POINTER   0
+
+    // #define EDMA_STREAM8_BUFFER_SIZE   0
+    // #define EDMA_STREAM8_MEMORY0_BASE_ADDR   0
+    // #define EDMA_STREAM8_PERIPHERAL_BASE_ADDR   0
+    // #define EDMA_STREAM8_MEMORY1_BASE_ADDR   0
+    // #define EDMA_STREAM8_LINK_LIST_POINTER   0
+    /* add user code end dma define */
 
 /* exported functions ------------------------------------------------------- */
   /* system clock config. */
@@ -178,25 +178,26 @@ extern "C" {
   /* init tmr4 function. */
   void wk_tmr4_init(void);
 
-  /* init dma1 channel1 */
-  void wk_dma1_channel1_init(void);
-
-  /* init dma1 channel2 */
-  void wk_dma1_channel2_init(void);
-
   /* init dma1 channel3 */
   void wk_dma1_channel3_init(void);
 
   /* init dma1 channel4 */
   void wk_dma1_channel4_init(void);
 
+  /* init dma1 channel5 */
+  void wk_dma1_channel5_init(void);
+
+  /* init dma1 channel6 */
+  void wk_dma1_channel6_init(void);
+
   /* config dma channel transfer parameter */
   /* user need to modify parameters memory_base_addr and buffer_size */
   void wk_dma_channel_config(dma_channel_type* dmax_channely, uint32_t peripheral_base_addr, uint32_t memory_base_addr, uint16_t buffer_size);
 
 /* add user code begin exported functions */
+    void set_tmr_pwm_duty(tmr_type *tmr_x, tmr_channel_select_type ch, uint8_t duty);
 
-/* add user code end exported functions */
+    /* add user code end exported functions */
 
 #ifdef __cplusplus
 }
