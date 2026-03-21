@@ -11,7 +11,6 @@
 
 /* defined the led1 pin: pc2 */
 #define LED1_PIN GET_PIN(C, 2)
-int32_t BMP280_GetAltitude(uint32_t pressure, uint32_t seaLevelPressure);
 
 int main(void)
 {
@@ -20,12 +19,15 @@ int main(void)
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
 
     flight_init();
-    baro_init(&g_bmp280_baro);
+
     while (1)
     {
         g_bmp280_baro.read_press(&g_bmp280_baro);
-        int32_t altitude = BMP280_GetAltitude(g_bmp280_baro.pressure, 101325);
-        rt_kprintf("press: %d, altitude: %d, temp: %d\n", g_bmp280_baro.pressure, altitude, g_bmp280_baro.temp);
+        g_bmp280_baro.get_altitude(&g_bmp280_baro, 101325);
+
+        // 发送传感器数据到上位机 (MAG_X,Y,Z, ALT_BAR, TMP, BAR_STA, MAG_STA)
+        ANO_DT_Send_Sensor_Data(0, 0, 0, g_bmp280_baro.altitude,
+                                (int16_t)(g_bmp280_baro.temp / 10), 0, 0);
 
         rt_pin_write(LED1_PIN, PIN_LOW);
         rt_thread_mdelay(speed);
