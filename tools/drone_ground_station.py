@@ -50,6 +50,14 @@ class DroneGroundStation:
         self.imu_raw = {'acc': [0, 0, 0], 'gyro': [0, 0, 0]}
         self.quaternion = [1.0, 0.0, 0.0, 0.0]  # 四元数
         self.shock_status = 0  # 震动状态
+        # 传感器数据（气压计、罗盘）
+        self.sensor_data = {
+            'mag': [0, 0, 0],     # 磁罗盘 X, Y, Z
+            'alt_bar': 0,          # 气压高度 (cm)
+            'temp': 0,            # 温度 (°C)
+            'bar_sta': 0,         # 气压计状态
+            'mag_sta': 0          # 罗盘状态
+        }
 
         # 数据记录
         self.data_log = []
@@ -180,6 +188,18 @@ class DroneGroundStation:
             label = ttk.Label(sensor_frame, text="0.000", font=('Courier New', 9))
             label.grid(row=3, column=i * 2 + 1, padx=4, sticky='w')
             self.gyro_labels.append(label)
+
+        # 气压计和温度
+        baro_frame = ttk.LabelFrame(left_frame, text="气压计 & 温度")
+        baro_frame.pack(fill=tk.X, pady=(0, 10), ipady=5)
+
+        ttk.Label(baro_frame, text="气压高度:").grid(row=0, column=0, padx=5, pady=4, sticky='e')
+        self.alt_label = ttk.Label(baro_frame, text="0 cm", font=('Courier New', 11, 'bold'))
+        self.alt_label.grid(row=0, column=1, padx=5, pady=4, sticky='w')
+
+        ttk.Label(baro_frame, text="温度:").grid(row=1, column=0, padx=5, pady=4, sticky='e')
+        self.temp_label = ttk.Label(baro_frame, text="0.0 °C", font=('Courier New', 11, 'bold'))
+        self.temp_label.grid(row=1, column=1, padx=5, pady=4, sticky='w')
 
         # 右侧：图形显示区域
         right_frame = ttk.Frame(content_frame)
@@ -412,6 +432,23 @@ class DroneGroundStation:
                 v2 = struct.unpack('<h', frame[8:10])[0] / 10000.0
                 v3 = struct.unpack('<h', frame[10:12])[0] / 10000.0
                 self.quaternion = [v0, v1, v2, v3]
+
+            # 功能码0x02：传感器数据（罗盘、气压、温度）
+            elif func_code == 0x02 and data_len == 0x0E:
+                # 解析磁罗盘 int16 * 3
+                mag_x = struct.unpack('<h', frame[4:6])[0]
+                mag_y = struct.unpack('<h', frame[6:8])[0]
+                mag_z = struct.unpack('<h', frame[8:10])[0]
+                self.sensor_data['mag'] = [mag_x, mag_y, mag_z]
+                # 解析气压高度 int32 (cm)
+                alt_bar = struct.unpack('<i', frame[10:14])[0]
+                self.sensor_data['alt_bar'] = alt_bar
+                # 解析温度 int16 (0.1°C)
+                temp_raw = struct.unpack('<h', frame[14:16])[0]
+                self.sensor_data['temp'] = temp_raw / 10.0  # 转换为°C
+                # 状态字节
+                self.sensor_data['bar_sta'] = frame[16]
+                self.sensor_data['mag_sta'] = frame[17]
 
             # 记录数据
             self.append_data_log()
@@ -735,6 +772,10 @@ class DroneGroundStation:
                 for i in range(3):
                     self.acc_labels[i].config(text=f"{acc_data[i]:.3f}")
                     self.gyro_labels[i].config(text=f"{gyro_data[i]:.2f}")
+
+                # 更新气压计和温度数据
+                self.alt_label.config(text=f"{self.sensor_data['alt_bar']} cm")
+                self.temp_label.config(text=f"{self.sensor_data['temp']:.1f} °C")
 
                 # 更新可视化图形
                 self.update_3d_attitude()
