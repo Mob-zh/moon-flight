@@ -36,4 +36,7 @@ bool flight_init(void)
 {
     // IMU初始化
     IMU_init();
+
+    // 气压计初始化
+    baro_init(&g_bmp280_baro);
 }

@@ -50,31 +50,34 @@
 typedef struct baroDev_s baroDev_t;
 
 /**
- * @brief 陀螺仪设备结构体
+ * @brief 气压计设备结构体
  */
-// 定义陀螺仪设备结构体
 struct baroDev_s
 {
-    // 基础配置
-    uint32_t pressure;
-    uint32_t temp;
+    // 基础数据
+    uint32_t pressure; // 气压值 (Pa)
+    uint32_t temp;     // 温度值 (0.01°C)
+    int32_t  altitude; // 海拔高度 (cm)
 
-    uint8_t ID; // 定义用于存放ID号的变量
+    uint8_t ID; // 芯片ID
 
     // 函数指针
     bool (*init)(baroDev_t *);
     bool (*read_press)(baroDev_t *);
+    int32_t (*get_altitude)(baroDev_t *, uint32_t);
 };
 
 extern baroDev_t g_bmp280_baro;
 
 /************************ 函数声明 ************************/
 
+/************************ 函数声明 ************************/
+
 /**
  * @brief  气压计初始化
- * @param  无
- * @retval 无
+ * @param  baro: 气压计设备结构体
+ * @retval true-成功, false-失败
  */
 bool baro_init(baroDev_t *baro);
 
-#endif /* _BMP280_SPI_H_ */
+#endif /* _BMP280_H_ */

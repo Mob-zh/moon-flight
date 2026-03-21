@@ -141,20 +141,17 @@ static bool bmp280_init(baroDev_t *baro)
 
     uint8_t Ctrl_meas_reg = (Osrs_T << 5) | (Osrs_P << 2) | Mode;
     uint8_t Config_reg    = (T_sb << 5) | (Filter << 2) | Spi3w_en;
-    // 状态全部清零
+
+    // 复位BMP280
     spi_write_reg(bmp280_spi_dev, BMP280_RESET_REG, BMP280_RESET_VALUE);
     rt_thread_mdelay(10);
 
+    // 配置测量参数
     spi_write_reg(bmp280_spi_dev, BMP280_CTRLMEAS_REG, Ctrl_meas_reg);
-    // uint8_t ctrl_meas = spi_read_reg(bmp280_spi_dev, BMP280_CTRLMEAS_REG);
-    // rt_kprintf("CTRL_MEAS: 0x%02X\r\n", ctrl_meas);
-
     spi_write_reg(bmp280_spi_dev, BMP280_CONFIG_REG, Config_reg);
-    // uint8_t config = spi_read_reg(bmp280_spi_dev, BMP280_CONFIG_REG);
-    // rt_kprintf("CONFIG_REG: 0x%02X\r\n", config);
-
     rt_thread_mdelay(20);
 
+    // 读取校准参数
     Dig_T1 = bmp280_read_2regs(BMP280_DIG_T1_LSB_REG);
     Dig_T2 = bmp280_read_2regs(BMP280_DIG_T2_LSB_REG);
     Dig_T3 = bmp280_read_2regs(BMP280_DIG_T3_LSB_REG);
@@ -236,6 +233,21 @@ bool BMP280_GetPress(baroDev_t *baro)
     if (baro == NULL)
         return false;
 
+    // 等待测量完成
+    uint8_t timeout = 10;
+    while (timeout--)
+    {
+        uint8_t status = spi_read_reg(bmp280_spi_dev, BMP280_STATUS_REG);
+        if ((status & 0x08) == 0) // measuring=0表示完成
+            break;
+        rt_thread_mdelay(1);
+    }
+    if (timeout == 0)
+    {
+        rt_kprintf("BMP280 measure timeout\r\n");
+        return false;
+    }
+
     // 必须先读取温度，保证t_fine有效
     if (!BMP280_GetTemp(baro) || t_fine == 0)
     {
@@ -244,7 +256,6 @@ bool BMP280_GetPress(baroDev_t *baro)
     }
 
     int32_t adc_P = bmp280_read_3regs(BMP280_PRESSURE_MSB_REG);
-    rt_kprintf("adc_P:%d\r\n", adc_P);
     if (adc_P < 0)
         return false; // 读取失败
 
@@ -271,37 +282,32 @@ bool BMP280_GetPress(baroDev_t *baro)
 
     p = ((p + var1 + var2) >> 8) + (((int64_t)Dig_P7) << 4);
 
-    char press[64];
-    // sprintf(press, "Pressure out of range: %lld Pa\n", p);
-    // rt_kprintf("%s", press);
-    // // 压力值范围校验（正常大气压约 80000 ~ 110000 Pa）
-    // if (p < 30000 || p > 110000)
-    // {
-    //     baro->pressure = 0;
-    //     return false;
-    // }
-
-    baro->pressure = (uint32_t)p;
+    // BMP280输出是Q24.8格式，需要除以256得到Pa
+    baro->pressure = (uint32_t)(p >> 8);
     return true;
 }
 /**
- * @brief 根据气压计算海拔高度（补充实现）
- * @param pressure 气压值（Pa）
- * @param seaLevelPressure 海平面气压（默认101325Pa）
- * @return 海拔高度（单位：0.01米）
+ * @brief 根据气压计算海拔高度
+ * @param baro: 气压计设备结构体
+ * @param seaLevelPressure: 海平面气压(默认101325Pa)
+ * @return 海拔高度 (cm)
  */
-int32_t BMP280_GetAltitude(uint32_t pressure, uint32_t seaLevelPressure)
+int32_t baro_get_altitude(baroDev_t *baro, uint32_t seaLevelPressure)
 {
+    if (baro == NULL)
+        return 0;
+
     if (seaLevelPressure == 0)
     {
-        seaLevelPressure = 101325; // 默认海平面气压
+        seaLevelPressure = 101325;
     }
 
     // 气压高度公式：h = 44330 * (1 - (P/P0)^(1/5.255))
-    float pressureRatio = (float)pressure / (float)seaLevelPressure;
+    float pressureRatio = (float)baro->pressure / (float)seaLevelPressure;
     float altitude      = 44330.0f * (1.0f - pow(pressureRatio, 1.0f / 5.255f));
 
-    return (int32_t)(altitude * 100.0f); // 转换为0.01米单位
+    baro->altitude = (int32_t)(altitude * 100.0f); // 转换为cm
+    return baro->altitude;
 }
 
 bool bmp280_read_press(baroDev_t *baro)
@@ -332,8 +338,9 @@ bool baro_init(baroDev_t *baro)
     }
 
     // 初始化气压计
-    baro->init       = bmp280_init;
-    baro->read_press = bmp280_read_press;
+    baro->init         = bmp280_init;
+    baro->read_press   = bmp280_read_press;
+    baro->get_altitude = baro_get_altitude;
     baro->init(baro);
 
     return true;
