@@ -5,10 +5,14 @@
 
 #define M_PI 3.1415926f
 
+// IMU PI参数 (可调试修改)
+extern float imu_Kp;
+extern float imu_Ki;
+
 // 初始化惯导系统
 void IMU_init(void);
 
-// 外部信号量声明 (供中断处理函数使用)
-extern rt_sem_t imu_sem;
+// 调试命令
+void imu_debug_cmd(char *cmd);
 
 #endif

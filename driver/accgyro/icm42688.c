@@ -56,7 +56,7 @@ static int accgyro_device_attach(void)
     struct rt_spi_configuration spi_cfg = {0};
     spi_cfg.mode                        = RT_SPI_MODE_0 | RT_SPI_MSB; // CPOL=0, CPHA=0, 高位先行（ICM42688默认）
     spi_cfg.data_width                  = 8;                          // 8位数据宽度
-    spi_cfg.max_hz                      = 9 * 1000 * 1000;            // SPI时钟9MHz
+    spi_cfg.max_hz                      = 18 * 1000 * 1000;           // SPI时钟18MHz
     rt_spi_configure(icm_spi_dev, &spi_cfg);
 
     rt_kprintf("SPI1 device attach and init success!\n");
@@ -192,8 +192,8 @@ static bool icm42688_init(accgyroDev_t *accgyro)
     // 开启传感器
     sensor_power_on();
 
-    // 配置采样率(ODR)和量程（默认1KHz，2000DPS/16G）
-    uint8_t odr_config = odrLUT[ODR_1K];
+    // 配置采样率(ODR)和量程（默认8KHz，2000DPS/16G）
+    uint8_t odr_config = odrLUT[ODR_8K];
     spi_write_reg(icm_spi_dev, ICM42688P_RA_GYRO_CONFIG0, (0 << 5) | odr_config);
     rt_thread_mdelay(15);
     spi_write_reg(icm_spi_dev, ICM42688P_RA_ACCEL_CONFIG0, (0 << 5) | odr_config);

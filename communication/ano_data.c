@@ -101,27 +101,28 @@ void ANO_DT_Send_Att_RawData(float V0, float V1, float V2, float V3)
     uint8_t addcheck = 0;
     uint8_t _cnt     = 0;
 
-    V0 = V0 * 10000;
-    V1 = V1 * 10000;
-    V2 = V2 * 10000;
-    V3 = V3 * 10000;
+    // 先转换为int16_t再取字节，避免浮点数问题
+    int16_t V0_int = (int16_t)(V0 * 10000);
+    int16_t V1_int = (int16_t)(V1 * 10000);
+    int16_t V2_int = (int16_t)(V2 * 10000);
+    int16_t V3_int = (int16_t)(V3 * 10000);
 
     BUFF[_cnt++] = 0xAA; // 帧头
     BUFF[_cnt++] = 0xFF; // 目标地址
     BUFF[_cnt++] = 0X04; // 功能码
     BUFF[_cnt++] = 0x09; // 数据长度
     // 发送四元数数据
-    BUFF[_cnt++] = BYTE0(V0); // 数据内容,小段模式，低位在前,需要将字节进行拆分，调用上面的宏定义即可。
-    BUFF[_cnt++] = BYTE1(V0);
+    BUFF[_cnt++] = BYTE0(V0_int); // 数据内容,小段模式，低位在前,需要将字节进行拆分，调用上面的宏定义即可。
+    BUFF[_cnt++] = BYTE1(V0_int);
 
-    BUFF[_cnt++] = BYTE0(V1);
-    BUFF[_cnt++] = BYTE1(V1);
+    BUFF[_cnt++] = BYTE0(V1_int);
+    BUFF[_cnt++] = BYTE1(V1_int);
 
-    BUFF[_cnt++] = BYTE0(V2);
-    BUFF[_cnt++] = BYTE1(V2);
+    BUFF[_cnt++] = BYTE0(V2_int);
+    BUFF[_cnt++] = BYTE1(V2_int);
 
-    BUFF[_cnt++] = BYTE0(V3); // 数据内容,小段模式，低位在前,需要将字节进行拆分，调用上面的宏定义即可。
-    BUFF[_cnt++] = BYTE1(V3);
+    BUFF[_cnt++] = BYTE0(V3_int); // 数据内容,小段模式，低位在前,需要将字节进行拆分，调用上面的宏定义即可。
+    BUFF[_cnt++] = BYTE1(V3_int);
 
     BUFF[_cnt++] = 0x00;
 
