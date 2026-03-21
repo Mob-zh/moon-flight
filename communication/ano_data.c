@@ -139,3 +139,53 @@ void ANO_DT_Send_Att_RawData(float V0, float V1, float V2, float V3)
         rt_kprintf("%c", BUFF[i]);
     }
 }
+
+// 发送传感器数据（罗盘、气压、温度）ID=0x02
+void ANO_DT_Send_Sensor_Data(int16_t mag_x, int16_t mag_y, int16_t mag_z, int32_t alt_bar, int16_t temp, uint8_t bar_sta, uint8_t mag_sta)
+{
+    int     i;
+    uint8_t sumcheck = 0;
+    uint8_t addcheck = 0;
+    uint8_t _cnt     = 0;
+
+    BUFF[_cnt++] = 0xAA;  // 帧头
+    BUFF[_cnt++] = 0xFF;  // 目标地址
+    BUFF[_cnt++] = 0x02;  // 功能码
+    BUFF[_cnt++] = 0x0E;  // 数据长度 14
+
+    // MAG_X (int16)
+    BUFF[_cnt++] = BYTE0(mag_x);
+    BUFF[_cnt++] = BYTE1(mag_x);
+    // MAG_Y (int16)
+    BUFF[_cnt++] = BYTE0(mag_y);
+    BUFF[_cnt++] = BYTE1(mag_y);
+    // MAG_Z (int16)
+    BUFF[_cnt++] = BYTE0(mag_z);
+    BUFF[_cnt++] = BYTE1(mag_z);
+    // ALT_BAR (int32, 单位cm)
+    BUFF[_cnt++] = BYTE0(alt_bar);
+    BUFF[_cnt++] = BYTE1(alt_bar);
+    BUFF[_cnt++] = BYTE2(alt_bar);
+    BUFF[_cnt++] = BYTE3(alt_bar);
+    // TMP (int16, 0.1°C)
+    BUFF[_cnt++] = BYTE0(temp);
+    BUFF[_cnt++] = BYTE1(temp);
+    // BAR_STA (uint8)
+    BUFF[_cnt++] = bar_sta;
+    // MAG_STA (uint8)
+    BUFF[_cnt++] = mag_sta;
+
+    // 校验和
+    for (i = 0; i < BUFF[3] + 4; i++)
+    {
+        sumcheck += BUFF[i];
+        addcheck += sumcheck;
+    }
+    BUFF[_cnt++] = sumcheck;
+    BUFF[_cnt++] = addcheck;
+
+    for (i = 0; i < _cnt; i++)
+    {
+        rt_kprintf("%c", BUFF[i]);
+    }
+}
