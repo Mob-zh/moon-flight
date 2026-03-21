@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-穿越机地面站软件 V1.2 适配匿名科创ANO上位机协议
+穿越机地面站软件 V1.3 适配匿名科创ANO上位机协议
 功能：
 1. 实时姿态角显示（Roll, Pitch, Yaw）
 2. 3D姿态可视化（无人机模型实时旋转，优化精致模型）
@@ -12,6 +12,7 @@
 7. 串口稳定通信+异常重连
 8. 模拟数据模式（无硬件也可测试）
 9. 完整适配匿名科创ANO飞控通信协议（帧头、校验、功能码）
+10. 新增：支持14通道遥控器（0-13通道）
 """
 
 import sys
@@ -47,7 +48,7 @@ class DroneGroundStation:
 
         # 数据缓冲区
         self.euler_angles = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0}
-        self.rc_channels = [1500] * 9  # 0-8通道，遥控器中位默认1500
+        self.rc_channels = [1500] * 14  # 0-13通道(14通道)，遥控器中位默认1500
         self.imu_raw = {'acc': [0, 0, 0], 'gyro': [0, 0, 0]}
         self.quaternion = [1.0, 0.0, 0.0, 0.0]  # 四元数
         self.shock_status = 0  # 震动状态
@@ -164,14 +165,14 @@ class DroneGroundStation:
             self.attitude_labels[angle].grid(row=i, column=1, padx=8, pady=6, sticky='w')
 
         # 遥控通道显示
-        rc_frame = ttk.LabelFrame(left_frame, text="遥控通道值 (CH0-CH8)")
+        rc_frame = ttk.LabelFrame(left_frame, text="遥控通道值 (CH1-CH14)")
         rc_frame.pack(fill=tk.X, pady=(0, 10), ipady=5)
 
         self.rc_labels = []
-        for i in range(9):
-            row = i // 3
-            col = (i % 3) * 2
-            ttk.Label(rc_frame, text=f"CH{i}:").grid(row=row, column=col, padx=5, pady=4, sticky='e')
+        for i in range(14):
+            row = i // 4
+            col = (i % 4) * 2
+            ttk.Label(rc_frame, text=f"CH{i+1}:").grid(row=row, column=col, padx=5, pady=4, sticky='e')
             label = ttk.Label(rc_frame, text="1500", font=('Courier New', 10))
             label.grid(row=row, column=col + 1, padx=5, pady=4, sticky='w')
             self.rc_labels.append(label)
@@ -209,6 +210,39 @@ class DroneGroundStation:
         ttk.Label(baro_frame, text="温度:").grid(row=1, column=0, padx=5, pady=4, sticky='e')
         self.temp_label = ttk.Label(baro_frame, text="0.0 °C", font=('Courier New', 11, 'bold'))
         self.temp_label.grid(row=1, column=1, padx=5, pady=4, sticky='w')
+
+        # 遥杆位置可视化（两个摇杆平行放置）
+        stick_frame = ttk.LabelFrame(left_frame, text="遥杆位置")
+        stick_frame.pack(fill=tk.X, pady=(0, 10), ipady=5)
+
+        # 创建画布用于绘制两个摇杆位置
+        self.stick_canvas = tk.Canvas(stick_frame, width=260, height=130, bg="#FFFFFF", highlightthickness=1, highlightbackground="#CCCCCC")
+        self.stick_canvas.pack(pady=5)
+
+        # 两个摇杆的左上角位置和尺寸
+        left_x, left_y = 20, 10   # 左手摇杆方框左上角
+        right_x, right_y = 130, 10  # 右手摇杆方框左上角
+        box_size = 110  # 方框大小
+
+        # 绘制两个方框
+        self.stick_canvas.create_rectangle(left_x, left_y, left_x + box_size, left_y + box_size, outline="#333333", width=2)
+        self.stick_canvas.create_rectangle(right_x, right_y, right_x + box_size, right_y + box_size, outline="#333333", width=2)
+
+        # 摇杆中心位置
+        left_center_x = left_x + box_size // 2
+        left_center_y = left_y + box_size // 2
+        right_center_x = right_x + box_size // 2
+        right_center_y = right_y + box_size // 2
+
+        # 绘制准星（十字线代表中点）
+        self.stick_canvas.create_line(left_center_x - 15, left_center_y, left_center_x + 15, left_center_y, fill="#666666", width=1)
+        self.stick_canvas.create_line(left_center_x, left_center_y - 15, left_center_x, left_center_y + 15, fill="#666666", width=1)
+        self.stick_canvas.create_line(right_center_x - 15, right_center_y, right_center_x + 15, right_center_y, fill="#666666", width=1)
+        self.stick_canvas.create_line(right_center_x, right_center_y - 15, right_center_x, right_center_y + 15, fill="#666666", width=1)
+
+        # 摇杆位置点 - 中空小圆圈 (初始化在中心)
+        self.left_stick_dot = self.stick_canvas.create_oval(left_center_x-8, left_center_y-8, left_center_x+8, left_center_y+8, outline="#3498DB", width=3)
+        self.right_stick_dot = self.stick_canvas.create_oval(right_center_x-8, right_center_y-8, right_center_x+8, right_center_y+8, outline="#E74C3C", width=3)
 
         # 右侧：图形显示区域
         right_frame = ttk.Frame(content_frame)
@@ -516,6 +550,44 @@ class DroneGroundStation:
                 self.sensor_data['bar_sta'] = frame[16]
                 self.sensor_data['mag_sta'] = frame[17]
 
+            # 功能码0x40：遥控器通道数据（通道1-10: ROL, PIT, THR, YAW, AUX1-6）
+            elif func_code == 0x40 and data_len == 0x14:
+                # 解析10个通道 (int16 × 10)
+                rol = struct.unpack('<h', frame[4:6])[0]
+                pit = struct.unpack('<h', frame[6:8])[0]
+                thr = struct.unpack('<h', frame[8:10])[0]
+                yaw = struct.unpack('<h', frame[10:12])[0]
+                aux1 = struct.unpack('<h', frame[12:14])[0]
+                aux2 = struct.unpack('<h', frame[14:16])[0]
+                aux3 = struct.unpack('<h', frame[16:18])[0]
+                aux4 = struct.unpack('<h', frame[18:20])[0]
+                aux5 = struct.unpack('<h', frame[20:22])[0]
+                aux6 = struct.unpack('<h', frame[22:24])[0]
+                # 更新通道数据 (0-9 对应 CH1-10)
+                self.rc_channels[0] = rol
+                self.rc_channels[1] = pit
+                self.rc_channels[2] = thr
+                self.rc_channels[3] = yaw
+                self.rc_channels[4] = aux1
+                self.rc_channels[5] = aux2
+                self.rc_channels[6] = aux3
+                self.rc_channels[7] = aux4
+                self.rc_channels[8] = aux5
+                self.rc_channels[9] = aux6
+
+            # 功能码0x41：遥控器额外通道数据（通道11-14: AUX7-10）
+            elif func_code == 0x41 and data_len == 0x08:
+                # 解析4个通道 (int16 × 4)
+                aux7 = struct.unpack('<h', frame[4:6])[0]
+                aux8 = struct.unpack('<h', frame[6:8])[0]
+                aux9 = struct.unpack('<h', frame[8:10])[0]
+                aux10 = struct.unpack('<h', frame[10:12])[0]
+                # 更新通道数据 (10-13 对应 CH11-14)
+                self.rc_channels[10] = aux7
+                self.rc_channels[11] = aux8
+                self.rc_channels[12] = aux9
+                self.rc_channels[13] = aux10
+
             # 记录数据
             self.append_data_log()
 
@@ -598,7 +670,7 @@ class DroneGroundStation:
     def update_rc_channels(self, simulate=False):
         """更新遥控通道数据，模拟模式随机波动"""
         if simulate:
-            for i in range(9):
+            for i in range(14):
                 # 遥控器通道正常范围1000-2000，中位1500
                 self.rc_channels[i] = int(np.clip(self.rc_channels[i] + random.randint(-10, 10), 1000, 2000))
 
@@ -651,7 +723,7 @@ class DroneGroundStation:
                 headers = ['时间(s)', 'Roll(°)', 'Pitch(°)', 'Yaw(°)',
                            'AccX(g)', 'AccY(g)', 'AccZ(g)',
                            'GyroX(°/s)', 'GyroY(°/s)', 'GyroZ(°/s)', '震动状态']
-                headers += [f'CH{i}' for i in range(9)]
+                headers += [f'CH{i+1}' for i in range(14)]
                 writer = csv.DictWriter(f, fieldnames=headers)
                 writer.writeheader()
 
@@ -670,8 +742,8 @@ class DroneGroundStation:
                         'GyroZ(°/s)': data['gyro_z'],
                         '震动状态': data['shock']
                     }
-                    for i in range(9):
-                        row[f'CH{i}'] = data['rc_channels'][i]
+                    for i in range(14):
+                        row[f'CH{i+1}'] = data['rc_channels'][i]
                     writer.writerow(row)
             self.log_message(f"数据已保存至：{filename}")
         except Exception as e:
@@ -880,7 +952,7 @@ class DroneGroundStation:
                     self.attitude_labels[angle].config(text=f"{self.euler_angles[angle]:.2f}")
 
                 # 更新遥控通道
-                for i in range(9):
+                for i in range(14):
                     self.rc_labels[i].config(text=str(self.rc_channels[i]))
 
                 # 更新传感器数据
@@ -893,6 +965,48 @@ class DroneGroundStation:
                 # 更新气压计和温度数据
                 self.alt_label.config(text=f"{self.sensor_data['alt_bar']} cm")
                 self.temp_label.config(text=f"{self.sensor_data['temp']:.1f} °C")
+
+                # 更新遥杆位置可视化（通道值范围 -1000 ~ 1000）
+                if len(self.rc_channels) >= 4:
+                    roll_val = self.rc_channels[0]   # 横滚 -1000~1000
+                    pitch_val = self.rc_channels[1]  # 俯仰 -1000~1000
+                    thr_val = self.rc_channels[2]    # 油门 -1000~1000
+                    yaw_val = self.rc_channels[3]    # 偏航 -1000~1000
+
+                    # 摇杆中心位置
+                    left_x, left_y = 20, 10
+                    right_x, right_y = 130, 10
+                    box_size = 110
+                    left_center_x = left_x + box_size // 2
+                    left_center_y = left_y + box_size // 2
+                    right_center_x = right_x + box_size // 2
+                    right_center_y = right_y + box_size // 2
+
+                    # 左手摇杆: 水平=偏航(YAW), 垂直=油门(THR)
+                    # 值范围 -1000~1000，映射到 -40~40 像素偏移
+                    yaw_offset = int(yaw_val / 1000.0 * 40)
+                    thr_offset = -int(thr_val / 1000.0 * 40)  # 油门向上推为正，图像向上为负
+                    new_left_x = left_center_x + yaw_offset
+                    new_left_y = left_center_y + thr_offset
+                    self.stick_canvas.coords(self.left_stick_dot, new_left_x-8, new_left_y-8, new_left_x+8, new_left_y+8)
+
+                    # 右手摇杆: 水平=横滚(ROLL), 垂直=俯仰(PITCH)
+                    roll_offset = int(roll_val / 1000.0 * 40)
+                    pitch_offset = -int(pitch_val / 1000.0 * 40)  # 俯仰向上推为正，图像向上为负
+                    new_right_x = right_center_x + roll_offset
+                    new_right_y = right_center_y + pitch_offset
+                    self.stick_canvas.coords(self.right_stick_dot, new_right_x-8, new_right_y-8, new_right_x+8, new_right_y+8)
+
+                    # 根据油门值改变左手摇杆颜色 (油门值范围 -1000~1000)
+                    # -1000=最低油门, 1000=最高油门
+                    thr_ratio = (thr_val + 1000) / 2000.0
+                    if thr_ratio < 0.3:
+                        stick_color = "#27AE60"
+                    elif thr_ratio < 0.7:
+                        stick_color = "#F39C12"
+                    else:
+                        stick_color = "#E74C3C"
+                    self.stick_canvas.itemconfig(self.left_stick_dot, fill=stick_color)
 
                 # 更新可视化图形
                 self.update_3d_attitude()
