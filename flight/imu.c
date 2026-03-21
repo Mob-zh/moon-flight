@@ -27,8 +27,8 @@ typedef struct
 
 // ==================== 全局变量 ====================
 rt_sem_t imu_sem = RT_NULL;               // IMU信号量
-float    imu_Kp  = 0.001f;                // 比例增益300-5000
-float    imu_Ki  = 0.000000f;             // 积分增益
+float    imu_Kp  = 100.0f;                // 比例增益 10 - 100
+float    imu_Ki  = 0.00001f;              // 积分增益 0.00001 - 0.0001
 float    q0 = 1, q1 = 0, q2 = 0, q3 = 0;  // 四元数元素
 float    exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
 
@@ -152,20 +152,20 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     last_q0 = q0;
 
     // 发送四元数数据给上位机
-    ANO_DT_Send_Att_RawData(q0, q1, q2, q3);
+    // ANO_DT_Send_Att_RawData(q0, q1, q2, q3);
 
     // 四元数转换成欧拉角(Z->Y->X)
     // 偏航角YAW - 使用阈值过滤减少漂移
-    // if ((Gyr_filt->Z * RadtoDeg > 0.5f) || (Gyr_filt->Z * RadtoDeg < -0.5f))
-    // {
-    //     Att_Angle->yaw += Gyr_filt->Z * RadtoDeg * halfT * 21.5f; // 21 - 22
-    // }
+    if ((Gyr_filt->Z * RadtoDeg > 0.5f) || (Gyr_filt->Z * RadtoDeg < -0.5f))
+    {
+        Att_Angle->yaw += Gyr_filt->Z * RadtoDeg * halfT * 21.5f; // 21 - 22
+    }
 
-    // // 横滚角ROLL
-    // Att_Angle->rol = -asin(2.0f * (q1 * q3 - q0 * q2)) * RadtoDeg;
+    // 横滚角ROLL
+    Att_Angle->rol = -asin(2.0f * (q1 * q3 - q0 * q2)) * RadtoDeg;
 
-    // // 俯仰角PITCH
-    // Att_Angle->pit = -atan2(2.0f * q2 * q3 + 2.0f * q0 * q1, q0q0 - q1q1 - q2q2 + q3q3) * RadtoDeg;
+    // 俯仰角PITCH
+    Att_Angle->pit = -atan2(2.0f * q2 * q3 + 2.0f * q0 * q1, q0q0 - q1q1 - q2q2 + q3q3) * RadtoDeg;
 }
 
 // ==================== 线程入口函数 ====================
@@ -186,7 +186,7 @@ static void IMU_update_thread_entry(void *parameter)
         // rt_kprintf("%d, %d, %d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
         // 发送姿态角数据给上位机
         // 参数顺序: A(俯仰pitch), B(横滚roll), C(偏航yaw)
-        // ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
+        ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
     }
 }
 
