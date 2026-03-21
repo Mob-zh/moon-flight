@@ -1,4 +1,5 @@
 #include "elrs.h"
+#include "ano_data.h"
 #include <rtdevice.h>
 #include <rtthread.h>
 
@@ -20,6 +21,8 @@ static rt_err_t elrs_uart_rx_ind(rt_device_t dev, rt_size_t size);
 static void     crsf_process_byte(elrsDev_t *dev, uint8_t ch);
 static void     elrs_scale_channels(elrsDev_t *dev);
 static void     elrs_update_thread_entry(void *parameter);
+void            elrs_send_thread_init();
+static void     elrs_send_thread_entry(void *parameter);
 
 /************************ 串口回调（中断中只释放信号量） ************************/
 /**
@@ -38,12 +41,17 @@ static rt_err_t elrs_uart_rx_ind(rt_device_t dev, rt_size_t size)
 static uint8_t crsf_calc_checksum(const uint8_t *buf, uint16_t len)
 {
     uint8_t crc = 0; // 初始值为0
-    for (uint8_t i = 0; i < len; i++) {
+    for (uint8_t i = 0; i < len; i++)
+    {
         crc ^= buf[i];
-        for (uint8_t j = 0; j < 8; j++) {
-            if (crc & 0x80) {
+        for (uint8_t j = 0; j < 8; j++)
+        {
+            if (crc & 0x80)
+            {
                 crc = (crc << 1) ^ 0xD5;
-            } else {
+            }
+            else
+            {
                 crc = crc << 1;
             }
         }
@@ -115,21 +123,22 @@ static void crsf_process_byte(elrsDev_t *dev, uint8_t ch)
             if (calc == recv)
             {
                 /* 解析 16 通道，每通道 11bit，按 CRSF 标准打包 */
-								uint64_t bitBuffer = 0;
-								uint8_t bitsInBuffer = 0;
-								int byteIndex = 3;
+                uint64_t bitBuffer    = 0;
+                uint8_t  bitsInBuffer = 0;
+                int      byteIndex    = 3;
 
-								for (int i = 0; i < ELRS_CHANNEL_COUNT; i++) {
-										while (bitsInBuffer < 11) {
-												// 从payload中读取字节
-												bitBuffer |= ((uint64_t)frame[byteIndex++] << bitsInBuffer);
-												bitsInBuffer += 8;
-										}
-										dev->raw_channels[i] = bitBuffer & 0x07FF; // 取低11位作为通道值
-										bitBuffer >>= 11;
-										bitsInBuffer -= 11;
-								}
-
+                for (int i = 0; i < ELRS_CHANNEL_COUNT; i++)
+                {
+                    while (bitsInBuffer < 11)
+                    {
+                        // 从payload中读取字节
+                        bitBuffer |= ((uint64_t)frame[byteIndex++] << bitsInBuffer);
+                        bitsInBuffer += 8;
+                    }
+                    dev->raw_channels[i] = bitBuffer & 0x07FF; // 取低11位作为通道值
+                    bitBuffer >>= 11;
+                    bitsInBuffer -= 11;
+                }
 
                 dev->last_update_time = rt_tick_get_millisecond();
                 dev->is_connected     = true;
@@ -165,24 +174,14 @@ static void elrs_scale_channels(elrsDev_t *dev)
     }
 
     /* 语义通道映射（按常见 RC 约定：CH1~4 为飞控主通道） */
-    dev->ch1_roll  = dev->scaled_channels[0]; // CH1
-    dev->ch2_pitch = dev->scaled_channels[1]; // CH2
-
-    /* 油门通常使用 0~1000，更直观 */
-    {
-        int16_t s = dev->scaled_channels[2]; // CH3
-        if (s < ELRS_CHANNEL_SCALE_MIN)
-            s = ELRS_CHANNEL_SCALE_MIN;
-        if (s > ELRS_CHANNEL_SCALE_MAX)
-            s = ELRS_CHANNEL_SCALE_MAX;
-        dev->ch3_throttle = (int16_t)((s + ELRS_CHANNEL_SCALE_MAX) / 2); // -1000~1000 -> 0~1000
-    }
-
-    dev->ch4_yaw  = dev->scaled_channels[3]; // CH4
-    dev->ch5_aux1 = dev->scaled_channels[4]; // CH5
-    dev->ch6_aux2 = dev->scaled_channels[5]; // CH6
-    dev->ch7_aux3 = dev->scaled_channels[6]; // CH7
-    dev->ch8_aux4 = dev->scaled_channels[7]; // CH8
+    dev->ch1_roll     = dev->scaled_channels[0]; // CH1
+    dev->ch2_pitch    = dev->scaled_channels[1]; // CH2
+    dev->ch3_throttle = dev->scaled_channels[2]; // CH3
+    dev->ch4_yaw      = dev->scaled_channels[3]; // CH4
+    dev->ch5_arm      = dev->scaled_channels[4]; // CH5
+    dev->ch6_aux2     = dev->scaled_channels[5]; // CH6
+    dev->ch7_mode     = dev->scaled_channels[6]; // CH7
+    dev->ch8_aux4     = dev->scaled_channels[7]; // CH8
 }
 
 /************************ 核心功能函数 ************************/
@@ -247,14 +246,16 @@ static bool elrs_receiver_init(elrsDev_t *dev)
         }
     }
 
-    rt_thread_t elrs_thread =
-        rt_thread_create("elrs", elrs_update_thread_entry, RT_NULL, 1024, 20, 10);
+    rt_thread_t elrs_thread = rt_thread_create("elrs", elrs_update_thread_entry, RT_NULL, 1024, 20, 10);
     if (elrs_thread == RT_NULL)
     {
         rt_kprintf("ELRS: thread create failed!\n");
         return false;
     }
     rt_thread_startup(elrs_thread);
+
+    // 上位机测试用，试飞记得注释
+    elrs_send_thread_init();
 
     rt_kprintf("ELRS receiver init success on %s, baud=%d\n",
                ELRS_UART_DEVICE_NAME, ELRS_UART_BAUDRATE);
@@ -278,14 +279,23 @@ static bool elrs_read_channels(elrsDev_t *dev)
         return false;
     }
 
-    return dev->is_connected;
+    uint8_t ch;
+    if (rt_device_read(dev->uart_dev, 0, &ch, 1) == 1)
+    {
+        crsf_process_byte(dev, ch);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 /************************ 对外接口 ************************/
 /**
  * @brief 初始化ELRS接收机
  * @param dev: ELRS设备结构体
- * @return TRUE-初始化成功，FALSE-失败
+ * @return true-成功, false-失败
  */
 bool elrs_init(elrsDev_t *dev)
 {
@@ -312,16 +322,47 @@ bool elrs_init(elrsDev_t *dev)
  */
 static void elrs_update_thread_entry(void *parameter)
 {
-    uint8_t ch;
 
     while (1)
     {
         rt_sem_take(elrs_sem, RT_WAITING_FOREVER);
+        g_elrs_receiver.read_channels(&g_elrs_receiver);
+    }
+}
 
-        /* 从串口读取当前缓冲区的全部字节，逐字节断帧并解析 */
-        while (rt_device_read(g_elrs_receiver.uart_dev, 0, &ch, 1) == 1)
-        {
-            crsf_process_byte(&g_elrs_receiver, ch);
-        }
+void elrs_send_thread_init()
+{
+    // 创建遥控器数据发送线程（10Hz）
+    rt_thread_t elrs_send_thread = rt_thread_create("elrs_send", elrs_send_thread_entry, RT_NULL, 1024, 15, 10);
+    if (elrs_send_thread == RT_NULL)
+    {
+        rt_kprintf("ELRS: send thread create failed!\n");
+        return;
+    }
+    rt_thread_startup(elrs_send_thread);
+}
+
+/**
+ * @brief ELRS 遥控器数据发送线程：定时将通道数据发送到上位机
+ * 发送频率：10Hz（100ms间隔）
+ */
+static void elrs_send_thread_entry(void *parameter)
+{
+    while (1)
+    {
+        // 发送通道1-10 (ROL, PIT, THR, YAW, AUX1-6)
+        ANO_DT_Send_RC_ChData(
+            g_elrs_receiver.ch1_roll,     // ROL
+            g_elrs_receiver.ch2_pitch,    // PIT
+            g_elrs_receiver.ch3_throttle, // THR
+            g_elrs_receiver.ch4_yaw,      // YAW
+            g_elrs_receiver.ch5_arm,      // AUX1
+            g_elrs_receiver.ch6_aux2,     // AUX2
+            g_elrs_receiver.ch7_mode,     // AUX3
+            g_elrs_receiver.ch8_aux4,     // AUX4
+            0,                            // AUX5
+            0);                           // AUX6
+
+        rt_thread_mdelay(100); // 10Hz发送频率
     }
 }

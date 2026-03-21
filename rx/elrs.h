@@ -60,11 +60,11 @@ struct elrsDev_s
     /* 典型 RC 语义通道，便于业务直接使用 */
     int16_t ch1_roll;     // 通道1：横滚（Roll），范围：-1000 ~ 1000
     int16_t ch2_pitch;    // 通道2：俯仰（Pitch），范围：-1000 ~ 1000
-    int16_t ch3_throttle; // 通道3：油门（Throttle），范围：0 ~ 1000（0 = 最低油门）
+    int16_t ch3_throttle; // 通道3：油门（Throttle），范围：-1000 ~ 1000（0 = 最低油门）
     int16_t ch4_yaw;      // 通道4：偏航（Yaw），范围：-1000 ~ 1000
-    int16_t ch5_aux1;     // 通道5：AUX1，范围：-1000 ~ 1000
+    int16_t ch5_arm;      // 通道5：Arming，范围：-1000 ~ 1000
     int16_t ch6_aux2;     // 通道6：AUX2，范围：-1000 ~ 1000
-    int16_t ch7_aux3;     // 通道7：AUX3，范围：-1000 ~ 1000
+    int16_t ch7_mode;     // 通道7：Mode，范围：-1000 ~ 1000
     int16_t ch8_aux4;     // 通道8：AUX4，范围：-1000 ~ 1000
 
     uint32_t last_update_time; // 最后一次成功解析的时间（ms）
