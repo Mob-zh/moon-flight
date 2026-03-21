@@ -64,3 +64,11 @@ project.*
 *.dblite
 /rt-thread/tools/__pycache__
 *.pyc
+/board/WorkBench_Config/project/inc/at32f435_437_conf.h
+/board/WorkBench_Config/project/inc/at32f435_437_int.h
+/board/WorkBench_Config/project/src/at32f435_437_int.c
+/board/WorkBench_Config/project/src/wk_main.c
+/.claude/*.json
+/202200202056_莫志浩_基于RT-Thread的穿越机飞控设计.md
+/*.txt
+/tools/*.csv
