@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
 """
-穿越机地面站软件 V1.1 适配匿名科创ANO上位机协议
+穿越机地面站软件 V1.2 适配匿名科创ANO上位机协议
 功能：
 1. 实时姿态角显示（Roll, Pitch, Yaw）
 2. 3D姿态可视化（无人机模型实时旋转，优化精致模型）
 3. 遥控通道监控（0-8通道）
 4. 数据记录和CSV导出
-5. 传感器原始数据显示
-6. 串口稳定通信+异常重连
-7. 模拟数据模式（无硬件也可测试）
-8. 完整适配匿名科创ANO飞控通信协议（帧头、校验、功能码）
+5. 传感器原始数据显示+波形显示
+6. IMU原始数据波形实时显示（加速度计+陀螺仪）
+7. 串口稳定通信+异常重连
+8. 模拟数据模式（无硬件也可测试）
+9. 完整适配匿名科创ANO飞控通信协议（帧头、校验、功能码）
 """
 
 import sys
@@ -70,6 +71,13 @@ class DroneGroundStation:
         self.roll_history = []
         self.pitch_history = []
         self.yaw_history = []
+        # IMU原始数据历史
+        self.acc_x_history = []
+        self.acc_y_history = []
+        self.acc_z_history = []
+        self.gyro_x_history = []
+        self.gyro_y_history = []
+        self.gyro_z_history = []
         self.start_plot_time = time.time()
 
         # 线程控制
@@ -81,11 +89,12 @@ class DroneGroundStation:
         self.log_message("地面站启动完成，已适配匿名科创ANO通信协议")
         self.log_message("3D无人机模型已优化，支持完整机身、机臂、螺旋桨可视化")
         self.log_message("已修正俯仰、横滚旋转方向，贴合实际操控直觉，抬头显示抬头、横滚方向匹配操控")
+        self.log_message("V1.2新增：IMU原始数据实时波形显示")
 
     def setup_gui(self):
         """设置图形用户界面，优化布局和控件样式"""
         self.root = tk.Tk()
-        self.root.title("穿越机地面站 V1.1（ANO协议版）")
+        self.root.title("穿越机地面站 V1.2（ANO协议版）")
         self.root.geometry("1450x920")
         # 窗口最小大小限制
         self.root.minsize(1200, 800)
@@ -206,18 +215,25 @@ class DroneGroundStation:
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, pady=5)
 
         # 3D姿态显示
-        fig_3d = plt.figure(figsize=(7, 5.5))
+        fig_3d = plt.figure(figsize=(7, 4.5))
         self.ax_3d = fig_3d.add_subplot(111, projection='3d')
         self.init_3d_plot()
         self.canvas_3d = FigureCanvasTkAgg(fig_3d, right_frame)
-        self.canvas_3d.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+        self.canvas_3d.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(0, 6))
 
         # 姿态角实时曲线
-        fig_2d = plt.figure(figsize=(7, 3.5))
+        fig_2d = plt.figure(figsize=(7, 2.8))
         self.ax_2d = fig_2d.add_subplot(111)
         self.init_2d_plot()
         self.canvas_2d = FigureCanvasTkAgg(fig_2d, right_frame)
-        self.canvas_2d.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.canvas_2d.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(0, 6))
+
+        # IMU原始数据波形曲线（加速度计+陀螺仪）
+        fig_imu = plt.figure(figsize=(7, 2.8))
+        self.ax_imu = fig_imu.add_subplot(111)
+        self.init_imu_plot()
+        self.canvas_imu = FigureCanvasTkAgg(fig_imu, right_frame)
+        self.canvas_imu.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         # 底部日志区域
         log_frame = ttk.LabelFrame(main_frame, text="系统日志")
@@ -248,18 +264,36 @@ class DroneGroundStation:
         self.ax_3d.grid(False)
 
     def init_2d_plot(self):
-        """初始化2D姿态角曲线"""
+        """初始化2D四元数曲线"""
         self.ax_2d.clear()
-        self.ax_2d.set_title('姿态角实时变化曲线', fontsize=11, pad=10)
+        self.ax_2d.set_title('四元数实时变化曲线', fontsize=11, pad=10)
         self.ax_2d.set_xlabel('时间 (s)')
-        self.ax_2d.set_ylabel('姿态角 (°)')
+        self.ax_2d.set_ylabel('四元数值')
         self.ax_2d.grid(True, alpha=0.3)
-        self.ax_2d.set_ylim(-180, 180)
-        # 初始化三条曲线
-        self.line_roll, = self.ax_2d.plot([], [], '#FF6B6B', label='横滚Roll', linewidth=1.2)
-        self.line_pitch, = self.ax_2d.plot([], [], '#4ECDC4', label='俯仰Pitch', linewidth=1.2)
-        self.line_yaw, = self.ax_2d.plot([], [], '#45B7D1', label='偏航Yaw', linewidth=1.2)
+        self.ax_2d.set_ylim(-1.2, 1.2)
+        # 初始化四条曲线
+        self.line_q0, = self.ax_2d.plot([], [], '#E74C3C', label='q0', linewidth=1.2)
+        self.line_q1, = self.ax_2d.plot([], [], '#27AE60', label='q1', linewidth=1.2)
+        self.line_q2, = self.ax_2d.plot([], [], '#3498DB', label='q2', linewidth=1.2)
+        self.line_q3, = self.ax_2d.plot([], [], '#9B59B6', label='q3', linewidth=1.2)
         self.ax_2d.legend(loc='upper right', fontsize=9)
+
+    def init_imu_plot(self):
+        """初始化IMU原始数据波形曲线"""
+        self.ax_imu.clear()
+        self.ax_imu.set_title('IMU原始数据波形', fontsize=11, pad=10)
+        self.ax_imu.set_xlabel('时间 (s)')
+        self.ax_imu.set_ylabel('原始值')
+        self.ax_imu.grid(True, alpha=0.3)
+        # 加速度计曲线（g）
+        self.line_acc_x, = self.ax_imu.plot([], [], '#E74C3C', label='AccX(g)', linewidth=1.0)
+        self.line_acc_y, = self.ax_imu.plot([], [], '#27AE60', label='AccY(g)', linewidth=1.0)
+        self.line_acc_z, = self.ax_imu.plot([], [], '#3498DB', label='AccZ(g)', linewidth=1.0)
+        # 陀螺仪曲线（°/s）
+        self.line_gyro_x, = self.ax_imu.plot([], [], '#9B59B6', label='GyroX(°/s)', linewidth=1.0, linestyle='--')
+        self.line_gyro_y, = self.ax_imu.plot([], [], '#F39C12', label='GyroY(°/s)', linewidth=1.0, linestyle='--')
+        self.line_gyro_z, = self.ax_imu.plot([], [], '#1ABC9C', label='GyroZ(°/s)', linewidth=1.0, linestyle='--')
+        self.ax_imu.legend(loc='upper right', fontsize=8, ncol=2)
 
     def log_message(self, msg):
         """日志输出函数，带时间戳"""
@@ -384,6 +418,32 @@ class DroneGroundStation:
         # 对比帧尾校验位
         return (calc_sum == frame[-2]) and (calc_add == frame[-1])
 
+    def euler_angles_from_quaternion(self):
+        """从四元数转换为欧拉角（避免万向节锁问题）"""
+        q0, q1, q2, q3 = self.quaternion
+
+        # 归一化四元数
+        norm = np.sqrt(q0*q0 + q1*q1 + q2*q2 + q3*q3)
+        if norm < 0.001:
+            return
+        q0, q1, q2, q3 = q0/norm, q1/norm, q2/norm, q3/norm
+
+        # 横滚角 (Roll) - 交换q1,q2
+        roll = np.arctan2(2.0*(q0*q2 + q1*q3), 1.0 - 2.0*(q2*q2 + q1*q1))
+        # 俯仰角 (Pitch) - 交换q1,q2
+        sinp = 2.0*(q0*q1 - q3*q2)
+        if np.abs(sinp) >= 1:
+            pitch = np.copysign(np.pi/2, sinp)
+        else:
+            pitch = np.arcsin(sinp)
+        # 偏航角 (Yaw)
+        yaw = np.arctan2(2.0*(q0*q3 + q1*q2), 1.0 - 2.0*(q2*q2 + q3*q3))
+
+        # 转换为角度
+        self.euler_angles['roll'] = np.degrees(roll)
+        self.euler_angles['pitch'] = -np.degrees(pitch)
+        self.euler_angles['yaw'] = np.degrees(yaw)
+
     def parse_ano_frame(self, frame):
         """
         解析ANO协议完整数据帧，适配你提供的飞控发送函数
@@ -431,7 +491,13 @@ class DroneGroundStation:
                 v1 = struct.unpack('<h', frame[6:8])[0] / 10000.0
                 v2 = struct.unpack('<h', frame[8:10])[0] / 10000.0
                 v3 = struct.unpack('<h', frame[10:12])[0] / 10000.0
+                # 归一化四元数
+                norm = np.sqrt(v0*v0 + v1*v1 + v2*v2 + v3*v3)
+                if norm > 0.001:
+                    v0, v1, v2, v3 = v0/norm, v1/norm, v2/norm, v3/norm
                 self.quaternion = [v0, v1, v2, v3]
+                # 从四元数转换为欧拉角（避免万向节锁）
+                self.euler_angles_from_quaternion()
 
             # 功能码0x02：传感器数据（罗盘、气压、温度）
             elif func_code == 0x02 and data_len == 0x0E:
@@ -731,13 +797,19 @@ class DroneGroundStation:
         self.canvas_3d.draw()
 
     def update_2d_curve(self):
-        """更新2D姿态角实时曲线"""
+        """更新2D四元数实时曲线"""
         current_time = time.time() - self.start_plot_time
-        # 追加最新数据
+        # 追加最新四元数数据
         self.time_history.append(current_time)
-        self.roll_history.append(self.euler_angles['roll'])
-        self.pitch_history.append(self.euler_angles['pitch'])
-        self.yaw_history.append(self.euler_angles['yaw'])
+        q0, q1, q2, q3 = self.quaternion
+        self.roll_history.append(q0)
+        self.pitch_history.append(q1)
+        self.yaw_history.append(q2)
+
+        # 需要更多历史数据存储q3
+        if not hasattr(self, 'q3_history'):
+            self.q3_history = []
+        self.q3_history.append(q3)
 
         # 限制历史数据长度，防止内存溢出
         if len(self.time_history) > self.max_history:
@@ -745,14 +817,59 @@ class DroneGroundStation:
             self.roll_history.pop(0)
             self.pitch_history.pop(0)
             self.yaw_history.pop(0)
+            if hasattr(self, 'q3_history'):
+                self.q3_history.pop(0)
 
         # 更新曲线数据
-        self.line_roll.set_data(self.time_history, self.roll_history)
-        self.line_pitch.set_data(self.time_history, self.pitch_history)
-        self.line_yaw.set_data(self.time_history, self.yaw_history)
+        self.line_q0.set_data(self.time_history, self.roll_history)
+        self.line_q1.set_data(self.time_history, self.pitch_history)
+        self.line_q2.set_data(self.time_history, self.yaw_history)
+        if hasattr(self, 'q3_history'):
+            self.line_q3.set_data(self.time_history, self.q3_history)
         # 动态调整X轴范围
         self.ax_2d.set_xlim(max(0, current_time - self.max_history * 0.05), current_time)
         self.canvas_2d.draw()
+
+    def update_imu_curve(self):
+        """更新IMU原始数据波形曲线"""
+        current_time = time.time() - self.start_plot_time
+        # 追加最新数据
+        acc_data = self.imu_raw['acc']
+        gyro_data = self.imu_raw['gyro']
+        self.acc_x_history.append(acc_data[0])
+        self.acc_y_history.append(acc_data[1])
+        self.acc_z_history.append(acc_data[2])
+        self.gyro_x_history.append(gyro_data[0])
+        self.gyro_y_history.append(gyro_data[1])
+        self.gyro_z_history.append(gyro_data[2])
+
+        # 限制历史数据长度
+        if len(self.acc_x_history) > self.max_history:
+            self.acc_x_history.pop(0)
+            self.acc_y_history.pop(0)
+            self.acc_z_history.pop(0)
+            self.gyro_x_history.pop(0)
+            self.gyro_y_history.pop(0)
+            self.gyro_z_history.pop(0)
+
+        # 更新曲线数据
+        self.line_acc_x.set_data(self.time_history, self.acc_x_history)
+        self.line_acc_y.set_data(self.time_history, self.acc_y_history)
+        self.line_acc_z.set_data(self.time_history, self.acc_z_history)
+        self.line_gyro_x.set_data(self.time_history, self.gyro_x_history)
+        self.line_gyro_y.set_data(self.time_history, self.gyro_y_history)
+        self.line_gyro_z.set_data(self.time_history, self.gyro_z_history)
+
+        # 动态调整X轴范围
+        self.ax_imu.set_xlim(max(0, current_time - self.max_history * 0.05), current_time)
+        # 自动调整Y轴范围
+        if self.acc_x_history:
+            all_acc = self.acc_x_history + self.acc_y_history + self.acc_z_history
+            all_gyro = self.gyro_x_history + self.gyro_y_history + self.gyro_z_history
+            y_min = min(min(all_acc), min(all_gyro)) * 1.2
+            y_max = max(max(all_acc), max(all_gyro)) * 1.2
+            self.ax_imu.set_ylim(y_min, y_max)
+        self.canvas_imu.draw()
 
     def update_display(self):
         """定时刷新GUI界面数据"""
