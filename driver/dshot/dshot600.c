@@ -28,7 +28,7 @@ static uint8_t  channel_telemetry[DSHOT_CHANNEL_MAX] = {0};
 rt_event_t dshot_event;
 
 /* Private functions prototypes ---------------------------------------------*/
-// 计算DShot数据包校验和
+// 计算DShot数据包校验和（对12位数据计算4位校验和）
 static uint8_t dshot600_calc_checksum(uint16_t packet)
 {
     uint8_t  checksum = 0;
@@ -118,6 +118,9 @@ bool dshot600_init(void)
 
     wk_tmr3_init();
     wk_tmr4_init();
+
+    rt_thread_mdelay(5);
+
     return true;
 }
 
@@ -183,11 +186,6 @@ void dshot600_fill_dma_buffer(uint16_t *dma_buf, uint16_t packet)
             dma_buf[i] = DSHOT600_BIT_0_CCR; // 逻辑0
         }
     }
-
-    // 添加帧间隔位 - 保持线路在空闲状态（低电平）
-    // 这可以避免双向DShot的CRC错误
-    dma_buf[16] = DSHOT600_BIT_0_CCR; // 额外的bit保持低电平
-    dma_buf[17] = DSHOT600_BIT_0_CCR; // 确保ESC能正确采样最后的bit
 }
 
 /**
@@ -208,15 +206,14 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
     uint16_t packet = dshot600_compose_packet(value, channel_telemetry[channel]);
     // 2. 填充DMA缓冲区
     dshot600_fill_dma_buffer(dshot_dma_buffer[channel], packet);
-
     // 3. 根据通道选择对应的DMA和定时器寄存器
     // 在Normal模式下，需要先禁用DMA通道，重新配置后再启用
     rt_uint32_t e;
     switch (channel)
     {
     case DSHOT_CHANNEL_1:
+        rt_event_recv(dshot_event, DSHOT1_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_1, FALSE); // 先禁用
-        // rt_event_recv(dshot_event, DSHOT1_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_1,
                               (uint32_t)DSHOT_TMR3_CH1_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
@@ -225,8 +222,8 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
         break;
 
     case DSHOT_CHANNEL_2:
+        rt_event_recv(dshot_event, DSHOT2_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_2, FALSE); // 先禁用
-        // rt_event_recv(dshot_event, DSHOT2_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_2,
                               (uint32_t)DSHOT_TMR3_CH2_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
@@ -235,8 +232,8 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
         break;
 
     case DSHOT_CHANNEL_3:
+        rt_event_recv(dshot_event, DSHOT3_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_3, FALSE); // 先禁用
-        // rt_event_recv(dshot_event, DSHOT3_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_3,
                               (uint32_t)DSHOT_TMR4_CH1_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
@@ -245,8 +242,8 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
         break;
 
     case DSHOT_CHANNEL_4:
+        rt_event_recv(dshot_event, DSHOT4_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_4, FALSE); // 先禁用
-        // rt_event_recv(dshot_event, DSHOT4_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_4,
                               (uint32_t)DSHOT_TMR4_CH2_CCR,
                               (uint32_t)dshot_dma_buffer[channel],
@@ -470,6 +467,55 @@ static void dshot_run_cmd(int argc, char **argv)
 }
 MSH_CMD_EXPORT(dshot_run_cmd, dshot_run<channel><throttle> - Continuous throttle test);
 
+static void dshot_channel_cmd(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        rt_kprintf("Usage: dshot_set <throttle>\n");
+        rt_kprintf("  throttle: 48-2047\n");
+        return;
+    }
+
+    uint8_t channel = atoi(argv[1]);
+
+    if (channel >= DSHOT_CHANNEL_MAX)
+    {
+        rt_kprintf("Error: channel must be 0-3\n");
+        return;
+    }
+
+    g_dshot_run_channel = channel;
+    rt_kprintf("Channel set to %d\n", channel);
+}
+MSH_CMD_EXPORT(dshot_channel_cmd, dshot_set<channel> - Set channel in real - time);
+
+/**
+ * @brief  dshot_set 命令 - 实时修改油门值
+ * 用法: dshot_set <throttle>
+ * 说明: 在 dshot_run 运行期间实时修改油门值
+ */
+static void dshot_throttle_cmd(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        rt_kprintf("Usage: dshot_set <throttle>\n");
+        rt_kprintf("  throttle: 48-2047\n");
+        return;
+    }
+
+    uint16_t throttle = atoi(argv[1]);
+
+    if (throttle < DSHOT_THROTTLE_MIN_POWER || throttle > DSHOT_THROTTLE_MAX)
+    {
+        rt_kprintf("Error: throttle must be %d-%d\n", DSHOT_THROTTLE_MIN_POWER, DSHOT_THROTTLE_MAX);
+        return;
+    }
+
+    g_dshot_run_throttle = throttle;
+    rt_kprintf("Throttle set to %d\n", throttle);
+}
+MSH_CMD_EXPORT(dshot_throttle_cmd, dshot_set<throttle> - Set throttle in real - time);
+
 /**
  * @brief  dshot_stop 命令 - 停止持续发送
  */
@@ -485,3 +531,25 @@ static void dshot_stop_cmd(int argc, char **argv)
     }
 }
 MSH_CMD_EXPORT(dshot_stop_cmd, dshot_stop - Stop continuous throttle);
+
+/**
+ * @brief  dshot_arm 命令 - 解锁电调
+ * 用法: dshot_arm
+ * 说明: 发送命令0持续3秒来解锁电调
+ */
+static void dshot_arm_cmd(int argc, char **argv)
+{
+    LOG_I("Starting ESC arming sequence (3 seconds)...");
+
+    uint32_t start = rt_tick_get();
+    while (rt_tick_get() - start < 3000)
+    {
+        for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
+        {
+            dshot600_motor_stop((dshot_channel_e)ch);
+        }
+    }
+
+    LOG_I("ESC arming complete!");
+}
+MSH_CMD_EXPORT(dshot_arm_cmd, dshot_arm - Arm ESC with 3s command 0);

@@ -18,9 +18,8 @@ void DMA1_Channel3_IRQHandler(void)
     {
         /* add user code begin DMA1_FDT3_FLAG */
         /* handle full data transfer and clear flag */
+        // set_tmr_pwm_duty(TMR3, TMR_SELECT_CHANNEL_1, 0);
         rt_event_send(dshot_event, DSHOT1_DMA_FDT_EVENT);
-        set_tmr_pwm_duty(TMR3, TMR_SELECT_CHANNEL_1, 0);
-
         dma_flag_clear(DMA1_FDT3_FLAG);
         /* add user code end DMA1_FDT3_FLAG */
     }
