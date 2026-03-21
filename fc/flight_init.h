@@ -21,4 +21,7 @@ bool clear_init_check_bit(uint32_t flag);
 
 // 设置初始化检查位函数
 bool set_init_check_flag(uint32_t flag);
+
+bool flight_init(void);
+
 #endif

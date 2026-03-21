@@ -184,6 +184,9 @@ void wk_periph_clock_config(void)
 
   /* enable tmr4 periph clock */
   crm_periph_clock_enable(CRM_TMR4_PERIPH_CLOCK, TRUE);
+
+  /* enable tmr1 periph clock */
+  crm_periph_clock_enable(CRM_TMR1_PERIPH_CLOCK, TRUE);
 }
 
 /**
@@ -202,10 +205,48 @@ void wk_nvic_config(void)
   NVIC_SetPriority(DebugMonitor_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
   NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
   NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 15, 0));
+  nvic_irq_enable(TMR1_OVF_TMR10_IRQn, 0, 0);
   nvic_irq_enable(DMA1_Channel3_IRQn, 0, 0);
   nvic_irq_enable(DMA1_Channel4_IRQn, 0, 0);
   nvic_irq_enable(DMA1_Channel5_IRQn, 0, 0);
   nvic_irq_enable(DMA1_Channel6_IRQn, 0, 0);
+}
+
+/**
+  * @brief  init tmr1 function.
+  * @param  none
+  * @retval none
+  */
+void wk_tmr1_init(void)
+{
+  /* add user code begin tmr1_init 0 */
+
+  /* add user code end tmr1_init 0 */
+
+
+  /* add user code begin tmr1_init 1 */
+
+  /* add user code end tmr1_init 1 */
+
+  /* configure counter settings */
+  tmr_cnt_dir_set(TMR1, TMR_COUNT_UP);
+  tmr_clock_source_div_set(TMR1, TMR_CLOCK_DIV1);
+  tmr_repetition_counter_set(TMR1, 0);
+  tmr_period_buffer_enable(TMR1, FALSE);
+  tmr_base_init(TMR1, 999, 35);
+
+  /* configure primary mode settings */
+  tmr_sub_sync_mode_set(TMR1, FALSE);
+  tmr_primary_mode_select(TMR1, TMR_PRIMARY_SEL_RESET);
+
+  tmr_counter_enable(TMR1, TRUE);
+
+  /* enable ovfien interrupt */
+  tmr_interrupt_enable(TMR1, TMR_OVF_INT, TRUE);
+
+  /* add user code begin tmr1_init 2 */
+
+  /* add user code end tmr1_init 2 */
 }
 
 /**

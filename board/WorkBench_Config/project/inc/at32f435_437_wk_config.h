@@ -172,6 +172,9 @@ extern "C" {
   /* nvic config. */
   void wk_nvic_config(void);
 
+  /* init tmr1 function. */
+  void wk_tmr1_init(void);
+
   /* init tmr3 function. */
   void wk_tmr3_init(void);
 

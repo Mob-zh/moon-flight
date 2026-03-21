@@ -21,14 +21,15 @@ typedef struct
 } FLOAT_XYZ;
 
 // ==================== 算法参数 ====================
-#define Kp       0.3f   // 比例增益控制加速度计的收敛速率
-#define Ki       0.001f // 积分增益控制陀螺偏差的收敛速度
-#define halfT    0.005f // 采样周期的一半 (对应100Hz)
-#define RadtoDeg 57.3f  // 弧度转角度系数
+#define Kp       0.3f       // 比例增益控制加速度计的收敛速率
+#define Ki       0.001f     // 积分增益控制陀螺偏差的收敛速度
+#define halfT    0.0000625f // 采样周期的一半 (对应8kHz)
+#define RadtoDeg 57.3f      // 弧度转角度系数
 
 // ==================== 全局变量 ====================
-float q0 = 1, q1 = 0, q2 = 0, q3 = 0;  // 四元数元素
-float exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
+rt_sem_t imu_sem = RT_NULL;               // IMU信号量
+float    q0 = 1, q1 = 0, q2 = 0, q3 = 0;  // 四元数元素
+float    exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
 
 FLOAT_ANGLE Att_Angle = {0};                // 姿态角输出
 FLOAT_XYZ   Acc_filt = {0}, Gyr_filt = {0}; // 滤波后的传感器数据
@@ -152,32 +153,34 @@ static void IMU_update_thread_entry(void *parameter)
     // char status[64];
     while (1)
     {
+        // 等待信号量，读取并解算姿态
+        rt_sem_take(imu_sem, RT_WAITING_FOREVER);
+
         // 准备传感器数据
         IMU_Prepare_Data();
 
         // 执行姿态解算
         IMUupdate(&Gyr_filt, &Acc_filt, &Att_Angle);
 
-        // 发送原始数据给上位机（可选）
-        // ANO_DT_Send_IMU_RawData(g_icm_accgyro.accData[0], g_icm_accgyro.accData[1], g_icm_accgyro.accData[2],
-        //                         g_icm_accgyro.gyroData[0], g_icm_accgyro.gyroData[1], g_icm_accgyro.gyroData[2], 0);
-
+        rt_kprintf("%d, %d, %d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
         // 发送姿态角数据给上位机
         // 参数顺序: A(俯仰pitch), B(横滚roll), C(偏航yaw)
         // ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
-
-        // sprintf(status, "rol: %f, pit: %f, yaw: %f\n", Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
-        // rt_kprintf("%s", status);
-
-        // 延时10ms，对应100Hz采样率
-        rt_thread_mdelay(10);
     }
 }
 
 // ==================== IMU初始化函数 ====================
 void IMU_init(void)
 {
+    // 初始化信号量
+    imu_sem = rt_sem_create("imu_sem", 0, RT_IPC_FLAG_PRIO);
+
     accgyro_init(&g_icm_accgyro);
+
+    // 初始化定时器1,定时触发中断
+    crm_periph_clock_enable(CRM_TMR1_PERIPH_CLOCK, TRUE);
+    nvic_irq_enable(TMR1_OVF_TMR10_IRQn, 0, 0);
+    wk_tmr1_init();
 
     // 创建IMU更新线程
     rt_thread_t imu_thread = rt_thread_create("imu_update", IMU_update_thread_entry, RT_NULL, 1024, 20, 10);
