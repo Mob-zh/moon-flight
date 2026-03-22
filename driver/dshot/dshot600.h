@@ -22,8 +22,8 @@
 #define DSHOT600_PSC       1U         // 预分频值=1
 
 // DShot600 脉宽定义（基于ARR=239）
-#define DSHOT600_BIT_1_CCR 180U // 逻辑1脉宽=75% (240*0.75)
-#define DSHOT600_BIT_0_CCR 90U  // 逻辑0脉宽=37.5% (240*0.375)
+#define DSHOT600_BIT_1_CCR 160U // 逻辑1脉宽=75% (240*0.75)
+#define DSHOT600_BIT_0_CCR 80U  // 逻辑0脉宽=37.5% (240*0.375)
 
 // DShot数据包参数
 #define DSHOT_PACKET_LENGTH 16U   // DShot数据包长度=16bit
