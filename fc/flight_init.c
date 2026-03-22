@@ -1,5 +1,6 @@
 #include "flight_init.h"
 #include "imu.h"
+#include "elrs.h"
 
 // 初始化检查列表
 // 32位分别对应一个初始化检查项,需要初始化的项的位初始值为1,
@@ -34,6 +35,9 @@ bool set_init_check_flag(uint32_t flag)
 // 飞行器初始化函数
 bool flight_init(void)
 {
+    // 遥控器接收初始化
+    rx_init();
+
     // IMU初始化
     IMU_init();
 

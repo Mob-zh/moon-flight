@@ -1,5 +1,6 @@
 #include "elrs.h"
 #include "ano_data.h"
+#include <rtdbg.h>
 #include <rtdevice.h>
 #include <rtthread.h>
 
@@ -65,6 +66,14 @@ static uint8_t crsf_calc_checksum(const uint8_t *buf, uint16_t len)
  */
 static void crsf_process_byte(elrsDev_t *dev, uint8_t ch)
 {
+    // 收到同步字节时，重置解析状态（处理重连后数据）
+    if (ch == CRSF_SYNC_BYTE)
+    {
+        dev->crsf_in_frame     = false;
+        dev->crsf_pos          = 0;
+        dev->crsf_expected_len = 0;
+    }
+
     if (!dev->crsf_in_frame)
     {
         /* 还没进入帧状态，只接受同步字节 */
@@ -234,6 +243,7 @@ static bool elrs_receiver_init(elrsDev_t *dev)
     }
 
     rt_device_set_rx_indicate(dev->uart_dev, elrs_uart_rx_ind);
+    rt_thread_mdelay(50);
 
     // 创建信号量和处理线程
     if (elrs_sem == RT_NULL)
@@ -246,13 +256,16 @@ static bool elrs_receiver_init(elrsDev_t *dev)
         }
     }
 
-    rt_thread_t elrs_thread = rt_thread_create("elrs", elrs_update_thread_entry, RT_NULL, 1024, 20, 10);
+    rt_thread_t elrs_thread = rt_thread_create("elrs", elrs_update_thread_entry, RT_NULL, 1024, 18, 10);
     if (elrs_thread == RT_NULL)
     {
         rt_kprintf("ELRS: thread create failed!\n");
         return false;
     }
     rt_thread_startup(elrs_thread);
+
+    // 等待线程启动完成
+    rt_thread_mdelay(50);
 
     // 上位机测试用，试飞记得注释
     elrs_send_thread_init();
@@ -272,6 +285,15 @@ static bool elrs_read_channels(elrsDev_t *dev)
     if (dev == NULL)
         return false;
 
+    uint8_t ch;
+    bool    has_data = false;
+    while (rt_device_read(dev->uart_dev, 0, &ch, 1) == 1)
+    {
+        // LOG_I("byte 0x%02X\n", ch);
+        has_data = true;
+        crsf_process_byte(dev, ch);
+    }
+
     // 检查连接超时（500ms 无更新则判定为断开）
     if (rt_tick_get_millisecond() - dev->last_update_time > 500)
     {
@@ -279,16 +301,7 @@ static bool elrs_read_channels(elrsDev_t *dev)
         return false;
     }
 
-    uint8_t ch;
-    if (rt_device_read(dev->uart_dev, 0, &ch, 1) == 1)
-    {
-        crsf_process_byte(dev, ch);
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    return has_data;
 }
 
 /************************ 对外接口 ************************/
@@ -326,17 +339,19 @@ static void elrs_update_thread_entry(void *parameter)
     while (1)
     {
         rt_sem_take(elrs_sem, RT_WAITING_FOREVER);
-        g_elrs_receiver.read_channels(&g_elrs_receiver);
+        // 持续读取直到缓冲区空，避免数据积压
+        while (g_elrs_receiver.read_channels(&g_elrs_receiver))
+            ;
     }
 }
 
 void elrs_send_thread_init()
 {
     // 创建遥控器数据发送线程（10Hz）
-    rt_thread_t elrs_send_thread = rt_thread_create("elrs_send", elrs_send_thread_entry, RT_NULL, 1024, 15, 10);
+    rt_thread_t elrs_send_thread = rt_thread_create("elrs_send", elrs_send_thread_entry, RT_NULL, 1024, 20, 10);
     if (elrs_send_thread == RT_NULL)
     {
-        rt_kprintf("ELRS: send thread create failed!\n");
+        LOG_I("ELRS: send thread create failed!\n");
         return;
     }
     rt_thread_startup(elrs_send_thread);
@@ -363,6 +378,11 @@ static void elrs_send_thread_entry(void *parameter)
             0,                            // AUX5
             0);                           // AUX6
 
-        rt_thread_mdelay(100); // 10Hz发送频率
+        rt_thread_mdelay(10); // 10Hz发送频率
     }
+}
+
+bool rx_init(void)
+{
+    return elrs_init(&g_elrs_receiver);
 }

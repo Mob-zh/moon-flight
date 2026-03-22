@@ -77,6 +77,6 @@ struct elrsDev_s
 
 extern elrsDev_t g_elrs_receiver; // ELRS接收机实例
 
-bool elrs_init(elrsDev_t *dev);
+bool rx_init(void);
 
 #endif
