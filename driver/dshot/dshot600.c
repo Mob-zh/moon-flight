@@ -51,13 +51,6 @@ static uint8_t dshot600_calc_checksum(uint16_t packet)
 bool dshot600_init(void)
 {
 
-    // dshot_event = rt_event_create("dshot_event", RT_IPC_FLAG_PRIO);
-    // if (dshot_event == RT_NULL)
-    // {
-    //     LOG_E("dshot_event create failed");
-    //     return false;
-    // }
-
     // 初始化DMA缓冲区
     // 默认填充逻辑0（低电平），确保空闲状态正确
     for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
@@ -213,7 +206,6 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
     switch (channel)
     {
     case DSHOT_CHANNEL_1:
-        // rt_event_recv(dshot_event, DSHOT1_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_1, FALSE); // 先禁用
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_1,
                               (uint32_t)DSHOT_TMR3_CH1_CCR,
@@ -223,7 +215,6 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
         break;
 
     case DSHOT_CHANNEL_2:
-        // rt_event_recv(dshot_event, DSHOT2_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_2, FALSE); // 先禁用
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_2,
                               (uint32_t)DSHOT_TMR3_CH2_CCR,
@@ -233,7 +224,6 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
         break;
 
     case DSHOT_CHANNEL_3:
-        // rt_event_recv(dshot_event, DSHOT3_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_3, FALSE); // 先禁用
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_3,
                               (uint32_t)DSHOT_TMR4_CH1_CCR,
@@ -243,7 +233,6 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
         break;
 
     case DSHOT_CHANNEL_4:
-        // rt_event_recv(dshot_event, DSHOT4_DMA_FDT_EVENT, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &e);
         dma_channel_enable(DSHOT_DMA_CHANNEL_4, FALSE); // 先禁用
         wk_dma_channel_config(DSHOT_DMA_CHANNEL_4,
                               (uint32_t)DSHOT_TMR4_CH2_CCR,
@@ -258,44 +247,13 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
 }
 
 /**
- * @brief  发送DShot命令
- * @param  channel: 通道号
- * @param  command: 命令值(0-47)
- * @retval 无
- */
-void dshot600_send_command(dshot_channel_e channel, uint8_t command)
-{
-    if (command > DSHOT_THROTTLE_MAX_CMD)
-        command = DSHOT_THROTTLE_MAX_CMD;
-
-    dshot600_send_packet(channel, command);
-}
-
-/**
- * @brief  发送油门值（48-2047）
- * @param  channel: 通道号
- * @param  throttle: 油门值
- * @retval 无
- */
-void dshot600_send_throttle(dshot_channel_e channel, uint16_t throttle)
-{
-    // 限制在动力输出范围内
-    if (throttle < DSHOT_THROTTLE_MIN_POWER)
-        throttle = DSHOT_THROTTLE_MIN_POWER;
-    if (throttle > DSHOT_THROTTLE_MAX_POWER)
-        throttle = DSHOT_THROTTLE_MAX_POWER;
-
-    dshot600_send_packet(channel, throttle);
-}
-
-/**
  * @brief  停止电机（发送0命令）
  * @param  channel: 通道号
  * @retval 无
  */
 void dshot600_motor_stop(dshot_channel_e channel)
 {
-    dshot600_send_command(channel, DSHOT_CMD_MOTOR_STOP);
+    dshot600_send_packet(channel, DSHOT_CMD_MOTOR_STOP);
 }
 
 /**
@@ -309,7 +267,7 @@ void dshot600_beeper(dshot_channel_e channel, uint8_t beep_type)
     if (beep_type < 1 || beep_type > 5)
         return;
 
-    dshot600_send_command(channel, DSHOT_CMD_BEEP_1 - 1 + beep_type);
+    dshot600_send_packet(channel, DSHOT_CMD_BEEP_1 - 1 + beep_type);
 }
 
 /**
@@ -321,13 +279,13 @@ void dshot600_beeper(dshot_channel_e channel, uint8_t beep_type)
 void dshot600_set_rotation_direction(dshot_channel_e channel, uint8_t direction)
 {
     if (direction == 1)
-        dshot600_send_command(channel, DSHOT_CMD_ROTATION_DIR_1);
+        dshot600_send_packet(channel, DSHOT_CMD_ROTATION_DIR_1);
     else if (direction == 2)
-        dshot600_send_command(channel, DSHOT_CMD_ROTATION_DIR_2);
+        dshot600_send_packet(channel, DSHOT_CMD_ROTATION_DIR_2);
     else if (direction == 3)
-        dshot600_send_command(channel, DSHOT_CMD_ROTATION_DIR_1_2);
+        dshot600_send_packet(channel, DSHOT_CMD_ROTATION_DIR_1_2);
     else if (direction == 4)
-        dshot600_send_command(channel, DSHOT_CMD_ROTATION_DIR_2_2);
+        dshot600_send_packet(channel, DSHOT_CMD_ROTATION_DIR_2_2);
 }
 
 /**
@@ -343,98 +301,20 @@ void dshot600_led_control(dshot_channel_e channel, uint8_t led_num, uint8_t on_o
         return;
 
     uint8_t cmd_base = on_off ? DSHOT_CMD_LED_1_ON : DSHOT_CMD_LED_1_OFF;
-    dshot600_send_command(channel, cmd_base + (led_num - 1) * 2);
+    dshot600_send_packet(channel, cmd_base + (led_num - 1) * 2);
 }
-
-/**
- * @brief  测试函数：渐变油门值（0→最大→0循环）
- * @param  channel: 通道号
- * @retval 无
- */
-void dshot600_test_gradient_throttle(dshot_channel_e channel)
-{
-    // 更新油门值
-    test_throttle += throttle_step;
-    if (test_throttle >= DSHOT_THROTTLE_MAX || test_throttle <= DSHOT_THROTTLE_MIN)
-    {
-        throttle_step = -throttle_step; // 反向
-    }
-    // 发送数据包
-    dshot600_send_packet(channel, test_throttle);
-    // rt_thread_mdelay(5); // 渐变速度控制
-}
-
-void dshot600_set_throttle(int argc, char **argv)
-{
-    if (argc < 2)
-    {
-        rt_kprintf("Usage:\n");
-        rt_kprintf("  set_throttle <throttle> - Set throttle to n%% (0-100)\n");
-        return;
-    }
-
-    int throttle = atoi(argv[1]);
-    dshot600_send_throttle(DSHOT_CHANNEL_1, throttle);
-}
-MSH_CMD_EXPORT(dshot600_set_throttle, Set throttle to n % % (0 - 100));
 
 /* 持续发送测试变量 */
 uint8_t         g_dshot_run_enable   = 0;
 uint16_t        g_dshot_run_throttle = 0;
 dshot_channel_e g_dshot_run_channel  = DSHOT_CHANNEL_1;
 
-/**
- * @brief  停止持续发送
- */
-void dshot600_run_stop(void)
-{
-    g_dshot_run_enable = 0;
-}
-
-/**
- * @brief  dshot_run 命令 - 持续发送油门
- * 用法: dshot_run <channel> <throttle>
- *       channel: 0-3, throttle: 48-2047
- *       dshot_stop 停止
- */
-static void dshot_run_cmd(int argc, char **argv)
-{
-    if (argc < 3)
-    {
-        rt_kprintf("Usage: dshot_run <channel> <throttle>\n");
-        rt_kprintf("  channel: 0-3 (M1-M4)\n");
-        rt_kprintf("  throttle: 48-2047 (建议 100-500 测试)\n");
-        rt_kprintf("Example: dshot_run 0 200\n");
-        return;
-    }
-
-    uint8_t  channel  = atoi(argv[1]);
-    uint16_t throttle = atoi(argv[2]);
-
-    if (channel >= DSHOT_CHANNEL_MAX)
-    {
-        rt_kprintf("Error: channel must be 0-3\n");
-        return;
-    }
-
-    if (throttle < DSHOT_THROTTLE_MIN_POWER || throttle > DSHOT_THROTTLE_MAX)
-    {
-        rt_kprintf("Error: throttle must be %d-%d\n", DSHOT_THROTTLE_MIN_POWER, DSHOT_THROTTLE_MAX);
-        return;
-    }
-
-    g_dshot_run_channel  = (dshot_channel_e)channel;
-    g_dshot_run_throttle = throttle;
-    g_dshot_run_enable   = 1;
-}
-MSH_CMD_EXPORT(dshot_run_cmd, dshot_run<channel><throttle> - Continuous throttle test);
-
 static void dshot_channel_cmd(int argc, char **argv)
 {
     if (argc < 2)
     {
-        rt_kprintf("Usage: dshot_set <throttle>\n");
-        rt_kprintf("  throttle: 48-2047\n");
+        LOG_I("Usage: dshot_set <channel>\n");
+        LOG_I("  channel: 0-4\n");
         return;
     }
 
@@ -442,12 +322,12 @@ static void dshot_channel_cmd(int argc, char **argv)
 
     if (channel >= DSHOT_CHANNEL_MAX)
     {
-        rt_kprintf("Error: channel must be 0-3\n");
+        LOG_I("Error: channel must be 0-3\n");
         return;
     }
 
     g_dshot_run_channel = channel;
-    rt_kprintf("Channel set to %d\n", channel);
+    LOG_I("Channel set to %d\n", channel);
 }
 MSH_CMD_EXPORT(dshot_channel_cmd, dshot_set<channel> - Set channel in real - time);
 
@@ -460,8 +340,8 @@ static void dshot_throttle_cmd(int argc, char **argv)
 {
     if (argc < 2)
     {
-        rt_kprintf("Usage: dshot_set <throttle>\n");
-        rt_kprintf("  throttle: 48-2047\n");
+        LOG_I("Usage: dshot_set <throttle>\n");
+        LOG_I("  throttle: 48-2047\n");
         return;
     }
 
@@ -469,49 +349,23 @@ static void dshot_throttle_cmd(int argc, char **argv)
 
     if (throttle < DSHOT_THROTTLE_MIN_POWER || throttle > DSHOT_THROTTLE_MAX)
     {
-        rt_kprintf("Error: throttle must be %d-%d\n", DSHOT_THROTTLE_MIN_POWER, DSHOT_THROTTLE_MAX);
+        LOG_I("Error: throttle must be %d-%d\n", DSHOT_THROTTLE_MIN_POWER, DSHOT_THROTTLE_MAX);
         return;
     }
 
     g_dshot_run_throttle = throttle;
-    rt_kprintf("Throttle set to %d\n", throttle);
+    LOG_I("Throttle set to %d\n", throttle);
 }
 MSH_CMD_EXPORT(dshot_throttle_cmd, dshot_set<throttle> - Set throttle in real - time);
 
 /**
- * @brief  dshot_stop 命令 - 停止持续发送
- */
-static void dshot_stop_cmd(int argc, char **argv)
-{
-    dshot600_run_stop();
-    rt_kprintf("DShot stopped\n");
-
-    // 发送停止命令到所有通道
-    for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
-    {
-        dshot600_motor_stop((dshot_channel_e)ch);
-    }
-}
-MSH_CMD_EXPORT(dshot_stop_cmd, dshot_stop - Stop continuous throttle);
-
-/**
- * @brief  dshot_arm 命令 - 解锁电调
- * 用法: dshot_arm
- * 说明: 发送命令0持续3秒来解锁电调
+ * @brief  dshot_arm 命令 - 解锁电调，同时也是锁定电机的命令
  */
 static void dshot_arm_cmd(int argc, char **argv)
 {
-    LOG_I("Starting ESC arming sequence (3 seconds)...");
+    LOG_I("Starting ESC arming sequence ");
 
-    uint32_t start = rt_tick_get();
-    while (rt_tick_get() - start < 3000)
-    {
-        for (uint8_t ch = 0; ch < DSHOT_CHANNEL_MAX; ch++)
-        {
-            dshot600_motor_stop((dshot_channel_e)ch);
-        }
-    }
-
-    LOG_I("ESC arming complete!");
+    g_dshot_run_enable   = 1;
+    g_dshot_run_throttle = 0;
 }
-MSH_CMD_EXPORT(dshot_arm_cmd, dshot_arm - Arm ESC with 3s command 0);
+MSH_CMD_EXPORT(dshot_arm_cmd, dshot_arm - Arm ESC);
