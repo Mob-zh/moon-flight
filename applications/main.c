@@ -3,6 +3,7 @@
 #include "bmp280.h"
 #include "drv_common.h"
 #include "drv_gpio.h"
+#include "elrs.h"
 #include "flight_init.h"
 #include "imu.h"
 #include "wk_system.h"
@@ -17,7 +18,7 @@ int main(void)
     rt_uint32_t speed = 500;
     /* set led2 pin mode to output */
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
-
+    elrs_init(&g_elrs_receiver);
     flight_init();
 
     while (1)
@@ -26,8 +27,8 @@ int main(void)
         g_bmp280_baro.get_altitude(&g_bmp280_baro, 101325);
 
         // 发送传感器数据到上位机 (MAG_X,Y,Z, ALT_BAR, TMP, BAR_STA, MAG_STA)
-        ANO_DT_Send_Sensor_Data(0, 0, 0, g_bmp280_baro.altitude,
-                                (int16_t)(g_bmp280_baro.temp / 10), 0, 0);
+        // ANO_DT_Send_Sensor_Data(0, 0, 0, g_bmp280_baro.altitude,
+        //                         (int16_t)(g_bmp280_baro.temp / 10), 0, 0);
 
         rt_pin_write(LED1_PIN, PIN_LOW);
         rt_thread_mdelay(speed);
