@@ -186,7 +186,7 @@ static void IMU_update_thread_entry(void *parameter)
         // rt_kprintf("%d, %d, %d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
         // 发送姿态角数据给上位机
         // 参数顺序: A(俯仰pitch), B(横滚roll), C(偏航yaw)
-        // ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
+        ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
     }
 }
 
