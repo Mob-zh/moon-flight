@@ -19,14 +19,9 @@
 /* Private variables ---------------------------------------------------------*/
 // DMA缓冲区（4通道独立缓冲区）
 static uint16_t dshot_dma_buffer[DSHOT_CHANNEL_MAX][DSHOT_BITBANG_DMA_BUFFER_SIZE] = {0};
-// 渐变油门测试变量
-static uint16_t test_throttle = DSHOT_THROTTLE_MIN;
-static uint8_t  throttle_step = 1;
 // 通道状态变量
 static uint16_t channel_throttle[DSHOT_CHANNEL_MAX]  = {DSHOT_THROTTLE_MIN};
 static uint8_t  channel_telemetry[DSHOT_CHANNEL_MAX] = {0};
-
-// rt_event_t dshot_event;
 
 /* Private functions prototypes ---------------------------------------------*/
 // 计算DShot数据包校验和（对12位数据计算4位校验和）
@@ -124,7 +119,7 @@ bool dshot600_init(void)
  * @param  telemetry: 是否请求遥测
  * @retval 完整数据包（16bit）
  */
-uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry)
+static uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry)
 {
     uint16_t packet_value;
 
@@ -166,7 +161,7 @@ uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry)
  * - 添加2位间隔位保持线路在空闲状态（低电平）
  * - 确保ESC能正确采样最后的bit
  */
-void dshot600_fill_dma_buffer(uint16_t *dma_buf, uint16_t packet)
+static void dshot600_fill_dma_buffer(uint16_t *dma_buf, uint16_t packet)
 {
     // 按位填充16位DShot数据（MSB先行）
     for (uint8_t i = 0; i < DSHOT_PACKET_LENGTH; i++)

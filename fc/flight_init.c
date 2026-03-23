@@ -1,6 +1,6 @@
 #include "flight_init.h"
-#include "imu.h"
 #include "elrs.h"
+#include "imu.h"
 
 // 初始化检查列表
 // 32位分别对应一个初始化检查项,需要初始化的项的位初始值为1,
@@ -40,6 +40,9 @@ bool flight_init(void)
 
     // IMU初始化
     IMU_init();
+
+    // DShot600初始化
+    dshot600_init();
 
     // 气压计初始化
     baro_init(&g_bmp280_baro);

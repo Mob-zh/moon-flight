@@ -14,11 +14,11 @@
 #include "at32f435_437.h"
 #include "stdbool.h"
 /* Exported defines ----------------------------------------------------------*/
-// DShot600 核心参数（适配144MHz主频，RT-Thread配置）
+// DShot600 核心参数（适配288MHz主频，RT-Thread配置）
 #define DSHOT600_TIMER     TMR3       // 使用TIM3作为DShot600定时器
-#define DSHOT600_TIMER_CLK 144000000U // TIM3计数时钟=144MHz（RT-Thread实际配置）
+#define DSHOT600_TIMER_CLK 288000000U // TIM3计数时钟=288MHz（RT-Thread实际配置）
 #define DSHOT600_BIT_FREQ  600000U    // DShot600单bit频率=600kHz
-#define DSHOT600_ARR       239U       // 自动重装值=239 (144MHz/240=600kHz)
+#define DSHOT600_ARR       239U       // 自动重装值=239 (288MHz/2/240=600kHz)
 #define DSHOT600_PSC       1U         // 预分频值=1
 
 // DShot600 脉宽定义（基于ARR=239）
@@ -99,43 +99,16 @@ typedef enum
 // DShot600初始化（定时器+DMA）
 bool dshot600_init(void);
 
-// 构建DShot数据包（含校验和）
-uint16_t dshot600_compose_packet(uint16_t value, uint8_t telemetry);
-
-// 填充DMA缓冲区（单通道）
-void dshot600_fill_dma_buffer(uint16_t *dma_buf, uint16_t packet);
-
 // 发送DShot数据包（启动DMA传输）
 void dshot600_send_packet(dshot_channel_e channel, uint16_t value);
 
-// 发送DShot命令
-void dshot600_send_command(dshot_channel_e channel, uint8_t command);
-
-// 发送油门值（48-2047）
-void dshot600_send_throttle(dshot_channel_e channel, uint16_t throttle);
-
 // 停止电机（发送0命令）
 void dshot600_motor_stop(dshot_channel_e channel);
-
-// 电调鸣叫测试
-void dshot600_beep_test(dshot_channel_e channel, uint8_t beep_type);
 
 // 设置旋转方向
 void dshot600_set_rotation_direction(dshot_channel_e channel, uint8_t direction);
 
 // LED控制
 void dshot600_led_control(dshot_channel_e channel, uint8_t led_num, uint8_t on_off);
-
-// 测试函数：发送固定油门值
-void dshot600_test_send_fixed_throttle(dshot_channel_e channel, uint16_t throttle);
-
-// 测试函数：渐变油门值（0→最大→0循环）
-void dshot600_test_gradient_throttle(dshot_channel_e channel);
-
-// 测试函数：多通道同步测试
-void dshot600_test_multi_channel(void);
-
-// 测试函数：命令发送测试
-void dshot600_test_commands(dshot_channel_e channel);
 
 #endif /* __DSHOT600_H */

@@ -18,15 +18,14 @@ int main(void)
     /* set led2 pin mode to output */
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
 
-	flight_init();
-    dshot600_init();
+    flight_init();
 
     while (1)
     {
         g_bmp280_baro.read_press(&g_bmp280_baro);
         g_bmp280_baro.get_altitude(&g_bmp280_baro, 101325);
 
-        // 发送传感器数据到上位机(MAG_X, Y, Z, ALT_BAR, TMP, BAR_STA, MAG_STA)
+        // // 发送传感器数据到上位机(MAG_X, Y, Z, ALT_BAR, TMP, BAR_STA, MAG_STA)
         ANO_DT_Send_Sensor_Data(0, 0, 0, g_bmp280_baro.altitude,
                                 (int16_t)(g_bmp280_baro.temp / 10), 0, 0);
 
