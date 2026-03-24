@@ -363,23 +363,7 @@ void elrs_send_thread_init()
  */
 static void elrs_send_thread_entry(void *parameter)
 {
-    while (1)
-    {
-        // 发送通道1-10 (ROL, PIT, THR, YAW, AUX1-6)
-        ANO_DT_Send_RC_ChData(
-            g_elrs_receiver.ch1_roll,     // ROL
-            g_elrs_receiver.ch2_pitch,    // PIT
-            g_elrs_receiver.ch3_throttle, // THR
-            g_elrs_receiver.ch4_yaw,      // YAW
-            g_elrs_receiver.ch5_arm,      // AUX1
-            g_elrs_receiver.ch6_aux2,     // AUX2
-            g_elrs_receiver.ch7_mode,     // AUX3
-            g_elrs_receiver.ch8_aux4,     // AUX4
-            0,                            // AUX5
-            0);                           // AUX6
 
-        rt_thread_mdelay(10); // 10Hz发送频率
-    }
 }
 
 bool rx_init(void)

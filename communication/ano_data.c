@@ -1,4 +1,5 @@
 #include "ano_data.h"
+#include "bz121.h"
 #include <rtthread.h>
 
 // 数据拆分宏定义，在发送大于1字节的数据类型时，比如int16、float等，需要把数据拆分成单独字节进行发送
@@ -6,9 +7,6 @@
 #define BYTE1(dwTemp) (*((char *)(&dwTemp) + 1))
 #define BYTE2(dwTemp) (*((char *)(&dwTemp) + 2))
 #define BYTE3(dwTemp) (*((char *)(&dwTemp) + 3))
-
-// 调试模式开关：定义ANO_DT_DEBUG时，函数为空实现（不发送数据，节省运行时间）
-#define ANO_DT_DEBUG 0
 
 #if ANO_DT_DEBUG
 
@@ -33,7 +31,7 @@ void ANO_DT_Send_Euler_Angles(float A, float B, float C)
     BUFF[_cnt++] = 0xAA; // 帧头
     BUFF[_cnt++] = 0xFF; // 目标地址
     BUFF[_cnt++] = 0X03; // 功能码
-    BUFF[_cnt++] = 0x07; // 数据长度
+    BUFF[_cnt++] = 7;    // 数据长度
     BUFF[_cnt++] = BYTE0(A_int);
     BUFF[_cnt++] = BYTE1(A_int);
     BUFF[_cnt++] = BYTE0(B_int);
@@ -63,7 +61,7 @@ void ANO_DT_Send_IMU_RawData(int16_t Ax, int16_t Ay, int16_t Az, int16_t Gx, int
     BUFF[_cnt++] = 0xAA;
     BUFF[_cnt++] = 0xFF;
     BUFF[_cnt++] = 0X01;
-    BUFF[_cnt++] = 0x0D;
+    BUFF[_cnt++] = 13;
     BUFF[_cnt++] = BYTE0(Ax);
     BUFF[_cnt++] = BYTE1(Ax);
     BUFF[_cnt++] = BYTE0(Ay);
@@ -104,7 +102,7 @@ void ANO_DT_Send_Att_RawData(float V0, float V1, float V2, float V3)
     BUFF[_cnt++] = 0xAA;
     BUFF[_cnt++] = 0xFF;
     BUFF[_cnt++] = 0X04;
-    BUFF[_cnt++] = 0x09;
+    BUFF[_cnt++] = 9;
     BUFF[_cnt++] = BYTE0(V0_int);
     BUFF[_cnt++] = BYTE1(V0_int);
     BUFF[_cnt++] = BYTE0(V1_int);
@@ -136,7 +134,7 @@ void ANO_DT_Send_Sensor_Data(int16_t mag_x, int16_t mag_y, int16_t mag_z, int32_
     BUFF[_cnt++] = 0xAA;
     BUFF[_cnt++] = 0xFF;
     BUFF[_cnt++] = 0x02;
-    BUFF[_cnt++] = 0x0E;
+    BUFF[_cnt++] = 14;
     BUFF[_cnt++] = BYTE0(mag_x);
     BUFF[_cnt++] = BYTE1(mag_x);
     BUFF[_cnt++] = BYTE0(mag_y);
@@ -175,7 +173,7 @@ void ANO_DT_Send_RC_ChData(int16_t rol, int16_t pit, int16_t thr, int16_t yaw,
     BUFF[_cnt++] = 0xAA;
     BUFF[_cnt++] = 0xFF;
     BUFF[_cnt++] = 0x40;
-    BUFF[_cnt++] = 0x14;
+    BUFF[_cnt++] = 20;
     BUFF[_cnt++] = BYTE0(rol);
     BUFF[_cnt++] = BYTE1(rol);
     BUFF[_cnt++] = BYTE0(pit);
@@ -218,7 +216,7 @@ void ANO_DT_Send_RC_ExData(int16_t aux7, int16_t aux8, int16_t aux9, int16_t aux
     BUFF[_cnt++] = 0xAA;
     BUFF[_cnt++] = 0xFF;
     BUFF[_cnt++] = 0x41;
-    BUFF[_cnt++] = 0x08;
+    BUFF[_cnt++] = 8;
     BUFF[_cnt++] = BYTE0(aux7);
     BUFF[_cnt++] = BYTE1(aux7);
     BUFF[_cnt++] = BYTE0(aux8);
@@ -239,6 +237,67 @@ void ANO_DT_Send_RC_ExData(int16_t aux7, int16_t aux8, int16_t aux9, int16_t aux
     ano_send_data(BUFF, _cnt);
 }
 
+void ANO_DT_Send_GPS_Data(
+    uint8_t fix_sta, // FIX_STA: 定位状态
+    uint8_t s_num,   // S_NUM: 卫星数量
+    int32_t lng,     // LNG: 经度 (deg * 1e7)
+    int32_t lat,     // LAT: 纬度 (deg * 1e7)
+    int32_t alt_gps, // ALT_GPS: GPS高度 (mm)
+    int16_t n_spe,   // N_SPE: 北向速度 (cm/s)
+    int16_t e_spe,   // E_SPE: 东向速度 (cm/s)
+    int16_t d_spe,   // D_SPE: 下向速度 (cm/s)
+    uint8_t pdop,    // PDOP: 定位精度 (0-200)
+    uint8_t sacc,    // SACC: 速度精度 (mm/s / 100)
+    uint8_t vacc)    // VACC: 高度精度 (mm / 100)
+{
+    uint8_t BUFF[32];
+    uint8_t sumcheck = 0;
+    uint8_t addcheck = 0;
+    uint8_t _cnt     = 0;
+
+    // 帧头
+    BUFF[_cnt++] = 0xAA; // HEAD
+    BUFF[_cnt++] = 0xFF; // D_ADDR
+    BUFF[_cnt++] = 0x30; // ID
+    BUFF[_cnt++] = 23;   // LEN
+
+    // DATA (23字节)
+    BUFF[_cnt++] = fix_sta;        // FIX_STA
+    BUFF[_cnt++] = s_num;          // S_NUM
+    BUFF[_cnt++] = BYTE0(lng);     // LNG byte0
+    BUFF[_cnt++] = BYTE1(lng);     // LNG byte1
+    BUFF[_cnt++] = BYTE2(lng);     // LNG byte2
+    BUFF[_cnt++] = BYTE3(lng);     // LNG byte3
+    BUFF[_cnt++] = BYTE0(lat);     // LAT byte0
+    BUFF[_cnt++] = BYTE1(lat);     // LAT byte1
+    BUFF[_cnt++] = BYTE2(lat);     // LAT byte2
+    BUFF[_cnt++] = BYTE3(lat);     // LAT byte3
+    BUFF[_cnt++] = BYTE0(alt_gps); // ALT_GPS byte0
+    BUFF[_cnt++] = BYTE1(alt_gps); // ALT_GPS byte1
+    BUFF[_cnt++] = BYTE2(alt_gps); // ALT_GPS byte2
+    BUFF[_cnt++] = BYTE3(alt_gps); // ALT_GPS byte3
+    BUFF[_cnt++] = BYTE0(n_spe);   // N_SPE byte0
+    BUFF[_cnt++] = BYTE1(n_spe);   // N_SPE byte1
+    BUFF[_cnt++] = BYTE0(e_spe);   // E_SPE byte0
+    BUFF[_cnt++] = BYTE1(e_spe);   // E_SPE byte1
+    BUFF[_cnt++] = BYTE0(d_spe);   // D_SPE byte0
+    BUFF[_cnt++] = BYTE1(d_spe);   // D_SPE byte1
+    BUFF[_cnt++] = pdop;           // PDOP
+    BUFF[_cnt++] = sacc;           // SACC
+    BUFF[_cnt++] = vacc;           // VACC
+
+    // 校验
+    for (uint8_t i = 0; i < _cnt; i++)
+    {
+        sumcheck += BUFF[i];
+        addcheck += sumcheck;
+    }
+    BUFF[_cnt++] = sumcheck; // SC
+    BUFF[_cnt++] = addcheck; // AC
+
+    ano_send_data(BUFF, _cnt);
+}
+
 #else
 
 void ANO_DT_Send_Euler_Angles(float A, float B, float C) {}
@@ -247,5 +306,8 @@ void ANO_DT_Send_Att_RawData(float V0, float V1, float V2, float V3) {}
 void ANO_DT_Send_Sensor_Data(int16_t mag_x, int16_t mag_y, int16_t mag_z, int32_t alt_bar, int16_t temp, uint8_t bar_sta, uint8_t mag_sta) {}
 void ANO_DT_Send_RC_ChData(int16_t rol, int16_t pit, int16_t thr, int16_t yaw, int16_t aux1, int16_t aux2, int16_t aux3, int16_t aux4, int16_t aux5, int16_t aux6) {}
 void ANO_DT_Send_RC_ExData(int16_t aux7, int16_t aux8, int16_t aux9, int16_t aux10) {}
-
+void ANO_DT_Send_GPS_Data(uint8_t fix_sta, uint8_t s_num,
+                          int32_t lng, int32_t lat, int32_t alt_gps,
+                          int16_t n_spe, int16_t e_spe, int16_t d_spe,
+                          uint8_t pdop, uint8_t sacc, uint8_t vacc) {}
 #endif
