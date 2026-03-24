@@ -6,29 +6,14 @@
 #include <stdint.h>
 #include <string.h>
 
-// ==================== 数据类型定义 ====================
-typedef struct
-{
-    float rol; // 横滚角
-    float pit; // 俯仰角
-    float yaw; // 偏航角
-} FLOAT_ANGLE;
-
-typedef struct
-{
-    float X;
-    float Y;
-    float Z;
-} FLOAT_XYZ;
-
 // ==================== 算法参数 ====================
 #define halfT    0.0000625f // 采样周期的一半 (对应8kHz)
 #define RadtoDeg 57.3f      // 弧度转角度系数
 
 // ==================== 全局变量 ====================
 rt_sem_t imu_sem = RT_NULL;               // IMU信号量
-float    imu_Kp  = 100.0f;                // 比例增益 10 - 100
-float    imu_Ki  = 0.00001f;              // 积分增益 0.00001 - 0.0001
+float    imu_Kp  = 2.0f;                  // 比例增益 0.5 - 2.0 (动态调整)
+float    imu_Ki  = 0.0001f;               // 积分增益 0.0001
 float    q0 = 1, q1 = 0, q2 = 0, q3 = 0;  // 四元数元素
 float    exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
 
@@ -36,10 +21,37 @@ FLOAT_ANGLE Att_Angle = {0};                // 姿态角输出
 FLOAT_XYZ   Acc_filt = {0}, Gyr_filt = {0}; // 滤波后的传感器数据
 
 char float_str[64] = {0};
-// ==================== 快速平方根倒数 ====================
+
+// ==================== 快速平方根倒数（卡马克算法） ====================
 static float invSqrt(float x)
 {
-    return 1.0f / sqrtf(x);
+    // Carmack快速平方根倒数
+    float halfx = 0.5f * x;
+    union
+    {
+        float    f;
+        uint32_t i;
+    } val;
+    val.f = x;
+    val.i = 0x5f375a86 - (val.i >> 1);
+    val.f = val.f * (1.5f - halfx * val.f * val.f);
+    return val.f;
+}
+
+// ==================== 动态Kp计算 ====================
+static float base_Kp = 0.5f; // 基础增益
+
+static float IMU_CalcDynamicKp(float gx, float gy, float gz)
+{
+    // 计算角速度模值
+    float gyro_mag = sqrtf(gx * gx + gy * gy + gz * gz);
+
+    // 根据角速度动态调整Kp：0.5 ~ 2.0
+    float dynamic_Kp = base_Kp + (gyro_mag * 0.1f);
+    if (dynamic_Kp > 2.0f)
+        dynamic_Kp = 2.0f;
+
+    return dynamic_Kp;
 }
 
 // ==================== 数据准备函数 ====================
@@ -58,8 +70,6 @@ void IMU_Prepare_Data(void)
     g_icm_accgyro.gyroData[1] -= g_icm_accgyro.gyroData_offset[1];
     g_icm_accgyro.gyroData[2] -= g_icm_accgyro.gyroData_offset[2];
 
-    // ANO_DT_Send_IMU_RawData(g_icm_accgyro.accData[0], g_icm_accgyro.accData[1], g_icm_accgyro.accData[2], g_icm_accgyro.gyroData[0], g_icm_accgyro.gyroData[1], g_icm_accgyro.gyroData[2], 0);
-
     // 陀螺仪数据处理：LSB → 弧度/秒
     Gyr_filt.X = (float)(g_icm_accgyro.gyroData[0] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
     Gyr_filt.Y = (float)(g_icm_accgyro.gyroData[1] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
@@ -69,12 +79,6 @@ void IMU_Prepare_Data(void)
     Acc_filt.X = (float)(g_icm_accgyro.accData[0] * g_icm_accgyro.accScale);
     Acc_filt.Y = (float)(g_icm_accgyro.accData[1] * g_icm_accgyro.accScale);
     Acc_filt.Z = (float)(g_icm_accgyro.accData[2] * g_icm_accgyro.accScale);
-
-    // char str[64] = {0};
-    // sprintf(str, "Acc_filt: %f, %f, %f\n", Acc_filt.X, Acc_filt.Y, Acc_filt.Z);
-    // rt_kprintf(str);
-    // sprintf(str, "Gyr_filt: %f, %f, %f\n", Gyr_filt.X, Gyr_filt.Y, Gyr_filt.Z);
-    // rt_kprintf(str);
 }
 
 // ==================== 核心姿态解算算法 ====================
@@ -122,10 +126,18 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     eyInt = eyInt + ey * imu_Ki;
     ezInt = ezInt + ez * imu_Ki;
 
+    // 积分误差归一化（防止饱和）
+    exInt *= 0.99f;
+    eyInt *= 0.99f;
+    ezInt *= 0.99f;
+
+    // 动态计算Kp（根据角速度调整）
+    float current_Kp = IMU_CalcDynamicKp(gx, gy, gz);
+
     // 将误差PI补偿到陀螺仪
-    gx = gx + imu_Kp * ex + exInt;
-    gy = gy + imu_Kp * ey + eyInt;
-    gz = gz + imu_Kp * ez + ezInt;
+    gx = gx + current_Kp * ex + exInt;
+    gy = gy + current_Kp * ey + eyInt;
+    gz = gz + current_Kp * ez + ezInt;
 
     // 四元数微分方程
     q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * halfT;
@@ -158,7 +170,7 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     // 偏航角YAW - 使用阈值过滤减少漂移
     if ((Gyr_filt->Z * RadtoDeg > 0.5f) || (Gyr_filt->Z * RadtoDeg < -0.5f))
     {
-        Att_Angle->yaw += Gyr_filt->Z * RadtoDeg * halfT * 21.5f; // 21 - 22
+        Att_Angle->yaw += Gyr_filt->Z * RadtoDeg * halfT * 2.0f; // 0 - 2
     }
 
     // 横滚角ROLL
@@ -182,11 +194,6 @@ static void IMU_update_thread_entry(void *parameter)
 
         // 执行姿态解算
         IMUupdate(&Gyr_filt, &Acc_filt, &Att_Angle);
-
-        // rt_kprintf("%d, %d, %d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
-        // 发送姿态角数据给上位机
-        // 参数顺序: A(俯仰pitch), B(横滚roll), C(偏航yaw)
-        ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
     }
 }
 

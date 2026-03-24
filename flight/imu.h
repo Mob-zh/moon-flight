@@ -5,14 +5,28 @@
 
 #define M_PI 3.1415926f
 
-// IMU PI参数 (可调试修改)
-extern float imu_Kp;
-extern float imu_Ki;
+// 数据类型
+typedef struct
+{
+    float rol; // 横滚角
+    float pit; // 俯仰角
+    float yaw; // 偏航角
+} FLOAT_ANGLE;
+
+typedef struct
+{
+    float X;
+    float Y;
+    float Z;
+} FLOAT_XYZ;
+
+// 全局对象
+extern FLOAT_ANGLE Att_Angle; // 姿态角输出
+extern FLOAT_XYZ   Gyr_filt;  // 滤波后角速度
+extern float       imu_Kp;
+extern float       imu_Ki;
 
 // 初始化惯导系统
 void IMU_init(void);
-
-// 调试命令
-void imu_debug_cmd(char *cmd);
 
 #endif

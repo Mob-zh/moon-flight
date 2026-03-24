@@ -19,10 +19,10 @@ void TMR1_OVF_TMR10_IRQHandler(void)
         // 暂时放到这，之后放到控制线程中
         if (g_dshot_run_enable)
         {
-            dshot600_send_throttle(0, g_dshot_run_throttle);
-            dshot600_send_throttle(1, g_dshot_run_throttle);
-            dshot600_send_throttle(2, g_dshot_run_throttle);
-            dshot600_send_throttle(3, g_dshot_run_throttle);
+            dshot600_send_packet(0, g_dshot_run_throttle);
+            dshot600_send_packet(1, g_dshot_run_throttle);
+            dshot600_send_packet(2, g_dshot_run_throttle);
+            dshot600_send_packet(3, g_dshot_run_throttle);
         }
         /* clear flag */
         tmr_flag_clear(TMR1, TMR_OVF_FLAG);
