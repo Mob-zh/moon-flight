@@ -22,8 +22,6 @@ static rt_err_t elrs_uart_rx_ind(rt_device_t dev, rt_size_t size);
 static void     crsf_process_byte(elrsDev_t *dev, uint8_t ch);
 static void     elrs_scale_channels(elrsDev_t *dev);
 static void     elrs_update_thread_entry(void *parameter);
-void            elrs_send_thread_init();
-static void     elrs_send_thread_entry(void *parameter);
 
 /************************ 串口回调（中断中只释放信号量） ************************/
 /**
@@ -236,7 +234,7 @@ static bool elrs_receiver_init(elrsDev_t *dev)
         return false;
     }
 
-    if (rt_device_open(dev->uart_dev, RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_RDWR) != RT_EOK)
+    if (rt_device_open(dev->uart_dev, RT_DEVICE_FLAG_DMA_RX | RT_DEVICE_FLAG_RDWR) != RT_EOK)
     {
         rt_kprintf("ELRS: uart open failed!\n");
         return false;
@@ -256,7 +254,7 @@ static bool elrs_receiver_init(elrsDev_t *dev)
         }
     }
 
-    rt_thread_t elrs_thread = rt_thread_create("elrs", elrs_update_thread_entry, RT_NULL, 1024, 18, 10);
+    rt_thread_t elrs_thread = rt_thread_create("elrs", elrs_update_thread_entry, RT_NULL, 1024, 12, 10);
     if (elrs_thread == RT_NULL)
     {
         rt_kprintf("ELRS: thread create failed!\n");
@@ -264,11 +262,7 @@ static bool elrs_receiver_init(elrsDev_t *dev)
     }
     rt_thread_startup(elrs_thread);
 
-    // 等待线程启动完成
-    rt_thread_mdelay(50);
 
-    // 上位机测试用，试飞记得注释
-    elrs_send_thread_init();
 
     rt_kprintf("ELRS receiver init success on %s, baud=%d\n",
                ELRS_UART_DEVICE_NAME, ELRS_UART_BAUDRATE);
@@ -285,13 +279,15 @@ static bool elrs_read_channels(elrsDev_t *dev)
     if (dev == NULL)
         return false;
 
-    uint8_t ch;
-    bool    has_data = false;
-    while (rt_device_read(dev->uart_dev, 0, &ch, 1) == 1)
+    /* DMA模式批量读取，提高效率 */
+    uint8_t   buf[64];
+    rt_size_t count = rt_device_read(dev->uart_dev, 0, buf, sizeof(buf));
+
+    bool has_data = false;
+    for (rt_size_t i = 0; i < count; i++)
     {
-        // LOG_I("byte 0x%02X\n", ch);
         has_data = true;
-        crsf_process_byte(dev, ch);
+        crsf_process_byte(dev, buf[i]);
     }
 
     // 检查连接超时（500ms 无更新则判定为断开）
@@ -345,28 +341,22 @@ static void elrs_update_thread_entry(void *parameter)
     }
 }
 
-void elrs_send_thread_init()
-{
-    // 创建遥控器数据发送线程（10Hz）
-    rt_thread_t elrs_send_thread = rt_thread_create("elrs_send", elrs_send_thread_entry, RT_NULL, 1024, 20, 10);
-    if (elrs_send_thread == RT_NULL)
-    {
-        LOG_I("ELRS: send thread create failed!\n");
-        return;
-    }
-    rt_thread_startup(elrs_send_thread);
-}
-
-/**
- * @brief ELRS 遥控器数据发送线程：定时将通道数据发送到上位机
- * 发送频率：10Hz（100ms间隔）
- */
-static void elrs_send_thread_entry(void *parameter)
-{
-
-}
-
 bool rx_init(void)
 {
     return elrs_init(&g_elrs_receiver);
 }
+
+void rx_arm_cmd(int argc, char *argv[])
+{
+    if (argc != 2)
+        return;
+    if (rt_strcmp(argv[1], "arm") == 0)
+    {
+        g_elrs_receiver.ch5_arm = 1000;
+    }
+    else if (rt_strcmp(argv[1], "disarm") == 0)
+    {
+        g_elrs_receiver.ch5_arm = -1000;
+    }
+}
+MSH_CMD_EXPORT(rx_arm_cmd, arm / disarm)
