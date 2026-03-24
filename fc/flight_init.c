@@ -1,6 +1,14 @@
 #include "flight_init.h"
+#include "bz121.h"
+#include "dshot600.h"
 #include "elrs.h"
+#include "flight_control.h"
 #include "imu.h"
+#include "position_ekf.h"
+
+extern int ano_update_init(void);
+
+// 全局飞行控制实例
 
 // 初始化检查列表
 // 32位分别对应一个初始化检查项,需要初始化的项的位初始值为1,
@@ -46,4 +54,9 @@ bool flight_init(void)
 
     // 气压计初始化
     baro_init(&g_bmp280_baro);
+
+    // GPS初始化
+    gps_init(&g_bz121_gps);
+
+    ano_update_init();
 }

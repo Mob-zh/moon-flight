@@ -25,3 +25,4 @@ bool set_init_check_flag(uint32_t flag);
 bool flight_init(void);
 
 #endif
+
