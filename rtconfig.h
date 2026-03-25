@@ -149,6 +149,9 @@
 #define RT_USING_SERIAL_V1
 #define RT_SERIAL_USING_DMA
 #define RT_SERIAL_RB_BUFSZ 128
+#define RT_USING_CPUTIME
+#define RT_USING_CPUTIME_CORTEXM
+#define CPUTIME_TIMER_FREQ 0
 #define RT_USING_SPI
 #define RT_USING_PIN
 /* end of Device Drivers */
@@ -254,6 +257,10 @@
 
 /* tools packages */
 
+#define PKG_USING_RT_TUNNEL
+#define TUNNEL_NUM         1
+#define TUNNEL_BUFFER_SIZE 16384
+#define PKG_USING_RT_TUNNEL_V100
 /* end of tools packages */
 
 /* system packages */
@@ -273,6 +280,9 @@
 /* Micrium: Micrium software products porting for RT-Thread */
 
 /* end of Micrium: Micrium software products porting for RT-Thread */
+#define PKG_USING_RTI
+#define PKG_USING_RTI_V200
+#define BOARD_SYSTICK_FREQ_IN_HZ 288000000
 /* end of system packages */
 
 /* peripheral libraries and drivers */
