@@ -188,6 +188,9 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
     if (channel >= DSHOT_CHANNEL_MAX)
         return;
 
+    if (value > 200)
+        value = 200;
+
     // 更新通道状态
     channel_throttle[channel] = value;
 
@@ -364,3 +367,11 @@ static void dshot_arm_cmd(int argc, char **argv)
     g_dshot_run_throttle = 0;
 }
 MSH_CMD_EXPORT(dshot_arm_cmd, dshot_arm - Arm ESC);
+
+static void dshot_stop_cmd(int argc, char **argv)
+{
+    LOG_I("Starting ESC arming sequence ");
+
+    g_dshot_run_enable = 0;
+}
+MSH_CMD_EXPORT(dshot_stop_cmd, dshot_stop - Stop ESC);
