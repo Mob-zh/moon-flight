@@ -46,17 +46,27 @@ bool flight_init(void)
     // 遥控器接收初始化
     rx_init();
 
-    // IMU初始化
+    // DShot600初始化
+    // dshot600_init();
+
+    // IMU初始化（会创建imu_sem和control_sem）
     IMU_init();
 
-    // DShot600初始化
-    dshot600_init();
+    // 飞行控制初始化（创建控制线程，等待control_sem）
+    flight_control_init(&g_flight_control);
 
     // 气压计初始化
-    baro_init(&g_bmp280_baro);
+    // baro_init(&g_bmp280_baro);
 
     // GPS初始化
-    gps_init(&g_bz121_gps);
+    // gps_init(&g_bz121_gps);
 
     ano_update_init();
+
+    // 初始化定时器1,定时触发控制中断
+    crm_periph_clock_enable(CRM_TMR1_PERIPH_CLOCK, TRUE);
+    nvic_irq_enable(TMR1_OVF_TMR10_IRQn, 0, 0);
+    wk_tmr1_init();
+
+    return true;
 }

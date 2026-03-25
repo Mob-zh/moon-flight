@@ -23,6 +23,7 @@ typedef struct
 // 全局对象
 extern FLOAT_ANGLE Att_Angle; // 姿态角输出
 extern FLOAT_XYZ   Gyr_filt;  // 滤波后角速度
+extern FLOAT_XYZ   Acc_filt;  // 滤波后加速度计
 extern float       imu_Kp;
 extern float       imu_Ki;
 
