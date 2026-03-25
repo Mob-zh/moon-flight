@@ -7,14 +7,7 @@
 #include <rtthread.h>
 
 // ==================== 配置 ====================
-#define ANO_SEND_PERIOD 10 // 发送周期 (ms)
-
-// ==================== 数据发送开关 ====================
-#define ANO_SEND_EULER   1 // 发送欧拉角 (0x03)
-#define ANO_SEND_IMU_RAW 0 // 发送IMU原始数据 (0x01)
-#define ANO_SEND_GPS     0 // 发送GPS数据 (0x30)
-#define ANO_SEND_BARO    0 // 发送气压计数据 (0x02)
-#define ANO_SEND_RC      0 // 发送遥控器数据 (0x40)
+#define ANO_SEND_PERIOD 100 // 发送周期 (ms)
 
 // ==================== 全局对象引用 ====================
 extern FLOAT_ANGLE  Att_Angle;       // 欧拉角
@@ -33,8 +26,7 @@ static void ano_send_thread_entry(void *parameter)
 #if ANO_SEND_EULER
         // 发送欧拉角 (0x03)
         ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
-        rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (uint16_t)(Att_Angle.pit * 100), (uint16_t)(Att_Angle.rol * 100), Att_Angle.yaw);
-
+        rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
 #endif
 
 #if ANO_SEND_IMU_RAW
@@ -68,7 +60,7 @@ static void ano_send_thread_entry(void *parameter)
             sacc,                            // SACC
             vacc                             // VACC
         );
-        rt_kprintf("GPS data:LNG=%d, LAT=%d, ALT=%d, N_SPE=%d, E_SPE=%d, D_SPE=%d, PDOP=%d, SACC=%d, VACC=%d\n", gps_data->lon, gps_data->lat, gps_data->alt_msl, gps_data->vel_n, gps_data->vel_e, gps_data->vel_d, pdop, sacc, vacc);
+        // rt_kprintf("GPS data:LNG=%d, LAT=%d, ALT=%d, N_SPE=%d, E_SPE=%d, D_SPE=%d, PDOP=%d, SACC=%d, VACC=%d\n", gps_data->lon, gps_data->lat, gps_data->alt_msl, gps_data->vel_n, gps_data->vel_e, gps_data->vel_d, pdop, sacc, vacc);
 
 #endif
 

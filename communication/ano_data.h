@@ -5,6 +5,12 @@
 
 // 调试模式开关：定义ANO_DT_DEBUG时，函数为空实现（不发送数据，节省运行时间）
 #define ANO_DT_DEBUG 1
+// ==================== 数据发送开关 ====================
+#define ANO_SEND_EULER   1 // 发送欧拉角 (0x03)
+#define ANO_SEND_IMU_RAW 0 // 发送IMU原始数据 (0x01)
+#define ANO_SEND_GPS     0 // 发送GPS数据 (0x30)
+#define ANO_SEND_BARO    0 // 发送气压计数据 (0x02)
+#define ANO_SEND_RC      1 // 发送遥控器数据 (0x40)
 
 void ANO_DT_Send_Data(float A, float B, float C);
 void ANO_DT_Send_IMU_RawData(int16_t Ax, int16_t Ay, int16_t Az, int16_t Gx, int16_t Gy, int16_t Gz, uint8_t SHOCK_STA);
