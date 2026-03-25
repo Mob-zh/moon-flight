@@ -240,8 +240,8 @@ static bool elrs_receiver_init(elrsDev_t *dev)
         return false;
     }
 
-    rt_device_set_rx_indicate(dev->uart_dev, elrs_uart_rx_ind);
-    rt_thread_mdelay(50);
+    // rt_device_set_rx_indicate(dev->uart_dev, elrs_uart_rx_ind);
+    // rt_thread_mdelay(50);
 
     // 创建信号量和处理线程
     if (elrs_sem == RT_NULL)
@@ -261,8 +261,6 @@ static bool elrs_receiver_init(elrsDev_t *dev)
         return false;
     }
     rt_thread_startup(elrs_thread);
-
-
 
     rt_kprintf("ELRS receiver init success on %s, baud=%d\n",
                ELRS_UART_DEVICE_NAME, ELRS_UART_BAUDRATE);
@@ -334,10 +332,10 @@ static void elrs_update_thread_entry(void *parameter)
 
     while (1)
     {
-        rt_sem_take(elrs_sem, RT_WAITING_FOREVER);
+        // rt_sem_take(elrs_sem, RT_WAITING_FOREVER);
         // 持续读取直到缓冲区空，避免数据积压
-        while (g_elrs_receiver.read_channels(&g_elrs_receiver))
-            ;
+        g_elrs_receiver.read_channels(&g_elrs_receiver);
+        rt_thread_mdelay(5);
     }
 }
 

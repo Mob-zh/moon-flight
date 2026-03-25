@@ -367,9 +367,9 @@ static void at32_dma_config(struct rt_serial_device *serial, rt_ubase_t flag)
         _uart_dma_receive(instance, rx_fifo->buffer, serial->config.bufsz);
     }
 
-    /* dma irq should set in dma tx mode */
-    nvic_irq_enable(dma_config->dma_irqn, 0, 0);
-    nvic_irq_enable(instance->irqn, 1, 0);
+    /* dma irq should set in dma tx mode, priority 1 to avoid blocking TMR1 (IMU) */
+    nvic_irq_enable(dma_config->dma_irqn, 1, 0);
+    nvic_irq_enable(instance->irqn, 2, 0);
 }
 
 static rt_ssize_t at32_dma_transmit(struct rt_serial_device *serial, rt_uint8_t *buf, rt_size_t size, int direction)
