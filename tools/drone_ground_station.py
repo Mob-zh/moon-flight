@@ -67,7 +67,7 @@ class DroneGroundStation:
         self.record_start_time = None
 
         # 历史数据（用于绘图）
-        self.max_history = 200
+        self.max_history = 1000  # 增加历史长度以显示阶跃响应
         self.time_history = []
         self.roll_history = []
         self.pitch_history = []
@@ -127,8 +127,7 @@ class DroneGroundStation:
         self.connect_btn = ttk.Button(control_frame, text="连接串口", command=self.toggle_connection)
         self.connect_btn.grid(row=0, column=4, padx=8, pady=5)
 
-        self.sim_btn = ttk.Button(control_frame, text="开启模拟", command=self.toggle_simulate)
-        self.sim_btn.grid(row=0, column=5, padx=8, pady=5)
+        # 已删除模拟按钮
 
         self.record_btn = ttk.Button(control_frame, text="开始记录", command=self.toggle_recording)
         self.record_btn.grid(row=0, column=6, padx=8, pady=5)
@@ -136,12 +135,48 @@ class DroneGroundStation:
         self.clear_btn = ttk.Button(control_frame, text="清空日志", command=self.clear_log)
         self.clear_btn.grid(row=0, column=7, padx=8, pady=5)
 
+        # 窗口切换按钮
+        self.view_btn = ttk.Button(control_frame, text="调参窗口", command=self.toggle_view)
+        self.view_btn.grid(row=0, column=9, padx=8, pady=5)
+
         # 状态标签
         self.status_label = ttk.Label(control_frame, text="状态：未连接", foreground="red")
-        self.status_label.grid(row=0, column=8, padx=15, pady=5)
+        self.status_label.grid(row=0, column=10, padx=15, pady=5)
 
-        # 主要内容区域
-        content_frame = ttk.Frame(main_frame)
+        # 主界面容器（包含主界面和调参界面）
+        self.view_container = ttk.Frame(main_frame)
+        self.view_container.pack(fill=tk.BOTH, expand=True)
+
+        # 主界面
+        self.main_view = ttk.Frame(self.view_container)
+        # 调参界面（初始隐藏）
+        self.tune_view = ttk.Frame(self.view_container)
+
+        # 当前视图标志
+        self.current_view = "main"
+
+        # 显示主界面
+        self.show_main_view()
+
+        # 启动界面刷新定时器
+        self.root.after(50, self.update_display)
+
+    def show_main_view(self):
+        """显示主界面"""
+        self.tune_view.pack_forget()
+        self.main_view.pack(fill=tk.BOTH, expand=True)
+        self.current_view = "main"
+        self.view_btn.config(text="调参窗口")
+
+        # 如果主界面内容未初始化，则创建
+        if not hasattr(self, 'main_initialized'):
+            self.setup_main_view_content()
+            self.main_initialized = True
+
+    def setup_main_view_content(self):
+        """设置主界面内容（只调用一次）"""
+        # 主界面内容区
+        content_frame = ttk.Frame(self.main_view)
         content_frame.pack(fill=tk.BOTH, expand=True)
 
         # 左侧：数据显示面板
@@ -262,24 +297,20 @@ class DroneGroundStation:
         self.canvas_2d = FigureCanvasTkAgg(fig_2d, right_frame)
         self.canvas_2d.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(0, 6))
 
-        # IMU原始数据波形曲线（加速度计+陀螺仪）
-        fig_imu = plt.figure(figsize=(7, 2.8))
+        # IMU原始数据波形曲线（加速度计+陀螺仪）放大显示
+        fig_imu = plt.figure(figsize=(9, 4.5))  # 增大图形尺寸
         self.ax_imu = fig_imu.add_subplot(111)
         self.init_imu_plot()
         self.canvas_imu = FigureCanvasTkAgg(fig_imu, right_frame)
         self.canvas_imu.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         # 底部日志区域
-        log_frame = ttk.LabelFrame(main_frame, text="系统日志")
+        log_frame = ttk.LabelFrame(self.main_view, text="系统日志")
         log_frame.pack(fill=tk.BOTH, pady=(10, 0), padx=5)
 
         self.log_text = scrolledtext.ScrolledText(log_frame, height=7, wrap=tk.WORD, bg="#F8F9FA")
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        # 日志框默认只读
         self.log_text.config(state=tk.DISABLED)
-
-        # 启动界面刷新定时器
-        self.root.after(50, self.update_display)
 
     def init_3d_plot(self):
         """初始化3D姿态可视化画布，优化画布参数适配精致无人机模型"""
@@ -298,35 +329,35 @@ class DroneGroundStation:
         self.ax_3d.grid(False)
 
     def init_2d_plot(self):
-        """初始化2D四元数曲线"""
+        """初始化陀螺仪原始数据曲线（替代四元数曲线）"""
         self.ax_2d.clear()
-        self.ax_2d.set_title('四元数实时变化曲线', fontsize=11, pad=10)
+        self.ax_2d.set_title('陀螺仪原始数据 (°/s) *100', fontsize=11, pad=10)
         self.ax_2d.set_xlabel('时间 (s)')
-        self.ax_2d.set_ylabel('四元数值')
+        self.ax_2d.set_ylabel('°/s')
         self.ax_2d.grid(True, alpha=0.3)
-        self.ax_2d.set_ylim(-1.2, 1.2)
-        # 初始化四条曲线
-        self.line_q0, = self.ax_2d.plot([], [], '#E74C3C', label='q0', linewidth=1.2)
-        self.line_q1, = self.ax_2d.plot([], [], '#27AE60', label='q1', linewidth=1.2)
-        self.line_q2, = self.ax_2d.plot([], [], '#3498DB', label='q2', linewidth=1.2)
-        self.line_q3, = self.ax_2d.plot([], [], '#9B59B6', label='q3', linewidth=1.2)
+        self.ax_2d.set_ylim(-500, 500)  # 放大显示
+        # 初始化三条陀螺仪曲线
+        self.line_q0, = self.ax_2d.plot([], [], '#E74C3C', label='GyroX', linewidth=1.5)
+        self.line_q1, = self.ax_2d.plot([], [], '#27AE60', label='GyroY', linewidth=1.5)
+        self.line_q2, = self.ax_2d.plot([], [], '#3498DB', label='GyroZ', linewidth=1.5)
         self.ax_2d.legend(loc='upper right', fontsize=9)
 
     def init_imu_plot(self):
-        """初始化IMU原始数据波形曲线"""
+        """初始化IMU原始数据波形曲线（放大显示）"""
         self.ax_imu.clear()
-        self.ax_imu.set_title('IMU原始数据波形', fontsize=11, pad=10)
+        self.ax_imu.set_title('IMU原始数据波形（加速度计 g | 陀螺仪 °/s）', fontsize=11, pad=10)
         self.ax_imu.set_xlabel('时间 (s)')
         self.ax_imu.set_ylabel('原始值')
         self.ax_imu.grid(True, alpha=0.3)
+        self.ax_imu.set_ylim(-10, 10)  # 放大显示范围
         # 加速度计曲线（g）
-        self.line_acc_x, = self.ax_imu.plot([], [], '#E74C3C', label='AccX(g)', linewidth=1.0)
-        self.line_acc_y, = self.ax_imu.plot([], [], '#27AE60', label='AccY(g)', linewidth=1.0)
-        self.line_acc_z, = self.ax_imu.plot([], [], '#3498DB', label='AccZ(g)', linewidth=1.0)
+        self.line_acc_x, = self.ax_imu.plot([], [], '#E74C3C', label='AccX(g)', linewidth=1.2)
+        self.line_acc_y, = self.ax_imu.plot([], [], '#27AE60', label='AccY(g)', linewidth=1.2)
+        self.line_acc_z, = self.ax_imu.plot([], [], '#3498DB', label='AccZ(g)', linewidth=1.2)
         # 陀螺仪曲线（°/s）
-        self.line_gyro_x, = self.ax_imu.plot([], [], '#9B59B6', label='GyroX(°/s)', linewidth=1.0, linestyle='--')
-        self.line_gyro_y, = self.ax_imu.plot([], [], '#F39C12', label='GyroY(°/s)', linewidth=1.0, linestyle='--')
-        self.line_gyro_z, = self.ax_imu.plot([], [], '#1ABC9C', label='GyroZ(°/s)', linewidth=1.0, linestyle='--')
+        self.line_gyro_x, = self.ax_imu.plot([], [], '#9B59B6', label='GyroX(°/s)', linewidth=1.2, linestyle='--')
+        self.line_gyro_y, = self.ax_imu.plot([], [], '#F39C12', label='GyroY(°/s)', linewidth=1.2, linestyle='--')
+        self.line_gyro_z, = self.ax_imu.plot([], [], '#1ABC9C', label='GyroZ(°/s)', linewidth=1.2, linestyle='--')
         self.ax_imu.legend(loc='upper right', fontsize=8, ncol=2)
 
     def log_message(self, msg):
@@ -345,6 +376,38 @@ class DroneGroundStation:
         self.log_text.delete(1.0, tk.END)
         self.log_text.config(state=tk.DISABLED)
         self.log_message("日志已清空")
+
+    def _update_pid_display(self, kp_r, kp_p, kp_y, ki_r, ki_p, ki_y, kd_r, kd_p, kd_y, limit):
+        """在主线程中更新PID参数显示"""
+        try:
+            # 更新输入框显示值
+            self.kp_roll.delete(0, tk.END)
+            self.kp_roll.insert(0, f"{kp_r:.2f}")
+            self.kp_pitch.delete(0, tk.END)
+            self.kp_pitch.insert(0, f"{kp_p:.2f}")
+            self.kp_yaw.delete(0, tk.END)
+            self.kp_yaw.insert(0, f"{kp_y:.2f}")
+
+            self.ki_roll.delete(0, tk.END)
+            self.ki_roll.insert(0, f"{ki_r:.2f}")
+            self.ki_pitch.delete(0, tk.END)
+            self.ki_pitch.insert(0, f"{ki_p:.2f}")
+            self.ki_yaw.delete(0, tk.END)
+            self.ki_yaw.insert(0, f"{ki_y:.2f}")
+
+            self.kd_roll.delete(0, tk.END)
+            self.kd_roll.insert(0, f"{kd_r:.2f}")
+            self.kd_pitch.delete(0, tk.END)
+            self.kd_pitch.insert(0, f"{kd_p:.2f}")
+            self.kd_yaw.delete(0, tk.END)
+            self.kd_yaw.insert(0, f"{kd_y:.2f}")
+
+            self.rate_limit.delete(0, tk.END)
+            self.rate_limit.insert(0, f"{limit:.0f}")
+
+            self.log_message(f"收到PID参数: Kp({kp_r:.2f}/{kp_p:.2f}/{kp_y:.2f}) Ki({ki_r:.2f}/{ki_p:.2f}/{ki_y:.2f}) Kd({kd_r:.2f}/{kd_p:.2f}/{kd_y:.2f}) Limit={limit:.0f}")
+        except Exception as e:
+            self.log_message(f"更新PID显示失败: {e}")
 
     def update_status(self, text, color="red"):
         """更新连接状态标签"""
@@ -371,6 +434,383 @@ class DroneGroundStation:
             self.is_thread_running = False
             self.update_status("未连接", "red")
             self.log_message("已关闭模拟数据模式")
+
+    def toggle_view(self):
+        """切换主界面/调参窗口"""
+        if self.current_view == "main":
+            self.show_tune_view()
+        else:
+            self.show_main_view()
+
+    def show_tune_view(self):
+        """显示调参窗口"""
+        self.main_view.pack_forget()
+        self.tune_view.pack(fill=tk.BOTH, expand=True)
+        self.current_view = "tune"
+        self.view_btn.config(text="主界面")
+
+        # 重置时间基准，以便从0开始显示波形
+        self.start_plot_time = time.time()
+        # 重置手动拖动标志
+        self.tune_pan_manual = False
+
+        # 初始化调参窗口内容（如果尚未初始化）
+        if not hasattr(self, 'tune_initialized'):
+            self.setup_tune_view()
+            self.tune_initialized = True
+
+    def setup_tune_view(self):
+        """设置调参窗口布局"""
+        # 左侧参数区 - 加宽到400
+        left_frame = ttk.Frame(self.tune_view, width=400)
+        left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 20), pady=10)
+        left_frame.pack_propagate(False)
+
+        # 角速度环参数输入
+        param_frame = ttk.LabelFrame(left_frame, text="角速度环PID参数")
+        param_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Kp
+        ttk.Label(param_frame, text="Kp (比例):").grid(row=0, column=0, columnspan=6, sticky='w', padx=5, pady=3)
+        ttk.Label(param_frame, text="Roll:").grid(row=1, column=0, padx=5, pady=2, sticky='e')
+        self.kp_roll = ttk.Entry(param_frame, width=10)
+        self.kp_roll.insert(0, "")
+        self.kp_roll.grid(row=1, column=1, padx=5, pady=2)
+        ttk.Label(param_frame, text="Pitch:").grid(row=1, column=2, padx=5, pady=2, sticky='e')
+        self.kp_pitch = ttk.Entry(param_frame, width=10)
+        self.kp_pitch.insert(0, "")
+        self.kp_pitch.grid(row=1, column=3, padx=5, pady=2)
+        ttk.Label(param_frame, text="Yaw:").grid(row=1, column=4, padx=5, pady=2, sticky='e')
+        self.kp_yaw = ttk.Entry(param_frame, width=10)
+        self.kp_yaw.insert(0, "")
+        self.kp_yaw.grid(row=1, column=5, padx=5, pady=2)
+
+        # Ki
+        ttk.Label(param_frame, text="Ki (积分):").grid(row=2, column=0, columnspan=6, sticky='w', padx=5, pady=(8, 2))
+        ttk.Label(param_frame, text="Roll:").grid(row=3, column=0, padx=5, pady=2, sticky='e')
+        self.ki_roll = ttk.Entry(param_frame, width=10)
+        self.ki_roll.insert(0, "")
+        self.ki_roll.grid(row=3, column=1, padx=5, pady=2)
+        ttk.Label(param_frame, text="Pitch:").grid(row=3, column=2, padx=5, pady=2, sticky='e')
+        self.ki_pitch = ttk.Entry(param_frame, width=10)
+        self.ki_pitch.insert(0, "")
+        self.ki_pitch.grid(row=3, column=3, padx=5, pady=2)
+        ttk.Label(param_frame, text="Yaw:").grid(row=3, column=4, padx=5, pady=2, sticky='e')
+        self.ki_yaw = ttk.Entry(param_frame, width=10)
+        self.ki_yaw.insert(0, "")
+        self.ki_yaw.grid(row=3, column=5, padx=5, pady=2)
+
+        # Kd
+        ttk.Label(param_frame, text="Kd (微分):").grid(row=4, column=0, columnspan=6, sticky='w', padx=5, pady=(8, 2))
+        ttk.Label(param_frame, text="Roll:").grid(row=5, column=0, padx=5, pady=2, sticky='e')
+        self.kd_roll = ttk.Entry(param_frame, width=10)
+        self.kd_roll.insert(0, "")
+        self.kd_roll.grid(row=5, column=1, padx=5, pady=2)
+        ttk.Label(param_frame, text="Pitch:").grid(row=5, column=2, padx=5, pady=2, sticky='e')
+        self.kd_pitch = ttk.Entry(param_frame, width=10)
+        self.kd_pitch.insert(0, "")
+        self.kd_pitch.grid(row=5, column=3, padx=5, pady=2)
+        ttk.Label(param_frame, text="Yaw:").grid(row=5, column=4, padx=5, pady=2, sticky='e')
+        self.kd_yaw = ttk.Entry(param_frame, width=10)
+        self.kd_yaw.insert(0, "")
+        self.kd_yaw.grid(row=5, column=5, padx=5, pady=2)
+
+        # 角速度上限
+        rate_frame = ttk.LabelFrame(left_frame, text="角速度上限")
+        rate_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(rate_frame, text="deg/s:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
+        self.rate_limit = ttk.Entry(rate_frame, width=10)
+        self.rate_limit.insert(0, "")
+        self.rate_limit.grid(row=0, column=1, padx=5, pady=5)
+
+        # 发送按钮
+        send_frame = ttk.Frame(left_frame)
+        send_frame.pack(fill=tk.X, pady=10)
+        self.send_btn = ttk.Button(send_frame, text="发送参数", command=self.send_tune_params)
+        self.send_btn.pack(side=tk.LEFT, padx=5)
+
+        # 当前参数显示
+        self.current_params_label = ttk.Label(left_frame, text="当前参数:\n等待读取...",
+                                              font=('Courier New', 9), foreground="#333333", justify='left')
+        self.current_params_label.pack(fill=tk.X, pady=10)
+
+        # 右侧波形区
+        right_frame = ttk.Frame(self.tune_view)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0, 10), pady=10)
+
+        # 波形切换按钮
+        self.wave_type = tk.StringVar(value="gyro")  # gyro/angle/alt
+        wave_btn_frame = ttk.Frame(right_frame)
+        wave_btn_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Radiobutton(wave_btn_frame, text="角速度", variable=self.wave_type,
+                        value="gyro", command=self.update_tune_wave_view).pack(side=tk.LEFT, padx=10)
+        ttk.Radiobutton(wave_btn_frame, text="角度", variable=self.wave_type,
+                        value="angle", command=self.update_tune_wave_view).pack(side=tk.LEFT, padx=10)
+        ttk.Radiobutton(wave_btn_frame, text="高度", variable=self.wave_type,
+                        value="alt", command=self.update_tune_wave_view).pack(side=tk.LEFT, padx=10)
+
+        # Y轴范围设置（滑条）
+        ylim_frame = ttk.Frame(right_frame)
+        ylim_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(ylim_frame, text="Y轴:").pack(side=tk.LEFT, padx=5)
+
+        # 下限滑条
+        self.ymin_scale = tk.Scale(ylim_frame, from_=-2000, to=2000, orient=tk.HORIZONTAL,
+                                   length=150, resolution=10, showvalue=True)
+        self.ymin_scale.set(-800)
+        self.ymin_scale.pack(side=tk.LEFT, padx=5)
+
+        # 上限滑条
+        self.ymax_scale = tk.Scale(ylim_frame, from_=-2000, to=2000, orient=tk.HORIZONTAL,
+                                   length=150, resolution=10, showvalue=True)
+        self.ymax_scale.set(800)
+        self.ymax_scale.pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(ylim_frame, text="应用", command=self.apply_tune_ylim).pack(side=tk.LEFT, padx=10)
+
+        # 波形导航控制
+        nav_frame = ttk.Frame(right_frame)
+        nav_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Button(nav_frame, text="◀左移", command=self.pan_left).pack(side=tk.LEFT, padx=5)
+        ttk.Button(nav_frame, text="▶右移", command=self.pan_right).pack(side=tk.LEFT, padx=5)
+        ttk.Button(nav_frame, text="⏪最新", command=self.pan_latest).pack(side=tk.LEFT, padx=5)
+        ttk.Label(nav_frame, text="窗口:").pack(side=tk.LEFT, padx=(20, 5))
+        self.pan_window = ttk.Entry(nav_frame, width=5)
+        self.pan_window.insert(0, "5")
+        self.pan_window.pack(side=tk.LEFT, padx=5)
+        ttk.Label(nav_frame, text="秒").pack(side=tk.LEFT)
+
+        # 波形画布容器
+        self.wave_container = ttk.Frame(right_frame)
+        self.wave_container.pack(fill=tk.BOTH, expand=True)
+
+        # 三个波形图（初始隐藏）
+        fig_gyro = plt.figure(figsize=(10, 6))
+        self.ax_gyro_tune = fig_gyro.add_subplot(111)
+        self.init_gyro_tune_plot()
+        self.canvas_gyro_tune = FigureCanvasTkAgg(fig_gyro, self.wave_container)
+
+        fig_angle = plt.figure(figsize=(10, 6))
+        self.ax_angle_tune = fig_angle.add_subplot(111)
+        self.init_angle_tune_plot()
+        self.canvas_angle_tune = FigureCanvasTkAgg(fig_angle, self.wave_container)
+
+        fig_alt = plt.figure(figsize=(10, 6))
+        self.ax_alt_tune = fig_alt.add_subplot(111)
+        self.init_alt_tune_plot()
+        self.canvas_alt_tune = FigureCanvasTkAgg(fig_alt, self.wave_container)
+
+        # 默认显示角速度
+        self.update_tune_wave_view()
+
+    def init_gyro_tune_plot(self):
+        """初始化调参窗口角速度波形"""
+        self.ax_gyro_tune.clear()
+        self.ax_gyro_tune.set_title('角速度 (°/s) - 放大显示', fontsize=11, pad=8)
+        self.ax_gyro_tune.set_xlabel('时间 (s)')
+        self.ax_gyro_tune.set_ylabel('°/s')
+        self.ax_gyro_tune.grid(True, alpha=0.3)
+        self.ax_gyro_tune.set_ylim(-800, 800)
+        # 增加历史数据长度
+        self.max_history = 1000
+        self.gyro_t_x, = self.ax_gyro_tune.plot([], [], '#E74C3C', label='Roll', linewidth=1.5)
+        self.gyro_t_y, = self.ax_gyro_tune.plot([], [], '#27AE60', label='Pitch', linewidth=1.5)
+        self.gyro_t_z, = self.ax_gyro_tune.plot([], [], '#3498DB', label='Yaw', linewidth=1.5)
+        self.ax_gyro_tune.legend(loc='upper right', fontsize=9)
+
+    def init_angle_tune_plot(self):
+        """初始化调参窗口角度波形"""
+        self.ax_angle_tune.clear()
+        self.ax_angle_tune.set_title('角度 (°)', fontsize=11, pad=8)
+        self.ax_angle_tune.set_xlabel('时间 (s)')
+        self.ax_angle_tune.set_ylabel('°')
+        self.ax_angle_tune.grid(True, alpha=0.3)
+        self.ax_angle_tune.set_ylim(-90, 90)
+        self.angle_t_roll, = self.ax_angle_tune.plot([], [], '#E74C3C', label='Roll', linewidth=1.5)
+        self.angle_t_pitch, = self.ax_angle_tune.plot([], [], '#27AE60', label='Pitch', linewidth=1.5)
+        self.angle_t_yaw, = self.ax_angle_tune.plot([], [], '#3498DB', label='Yaw', linewidth=1.5)
+        self.ax_angle_tune.legend(loc='upper right', fontsize=9)
+
+    def init_alt_tune_plot(self):
+        """初始化调参窗口高度波形"""
+        self.ax_alt_tune.clear()
+        self.ax_alt_tune.set_title('高度 (cm) - 气压计', fontsize=11, pad=8)
+        self.ax_alt_tune.set_xlabel('时间 (s)')
+        self.ax_alt_tune.set_ylabel('cm')
+        self.ax_alt_tune.grid(True, alpha=0.3)
+        self.alt_t_data, = self.ax_alt_tune.plot([], [], '#9B59B6', label='高度', linewidth=1.5)
+        self.ax_alt_tune.legend(loc='upper right', fontsize=9)
+
+        # 高度历史数据
+        self.alt_history = []
+
+    def send_tune_params(self):
+        """发送调参参数到飞控"""
+        if not self.is_connected:
+            messagebox.showwarning("提示", "请先连接串口")
+            return
+
+        try:
+            # 获取参数值
+            kp_r = self.kp_roll.get().strip()
+            kp_p = self.kp_pitch.get().strip()
+            kp_y = self.kp_yaw.get().strip()
+            ki_r = self.ki_roll.get().strip()
+            ki_p = self.ki_pitch.get().strip()
+            ki_y = self.ki_yaw.get().strip()
+            kd_r = self.kd_roll.get().strip()
+            kd_p = self.kd_pitch.get().strip()
+            kd_y = self.kd_yaw.get().strip()
+            rate = self.rate_limit.get().strip()
+
+            # 发送Kp
+            cmd = f"fc_set_rate_kp {kp_r} {kp_p} {kp_y}\r\n"
+            self.serial_port.write(cmd.encode('utf-8'))
+            time.sleep(0.05)
+
+            # 发送Ki
+            cmd = f"fc_set_rate_ki {ki_r} {ki_p} {ki_y}\r\n"
+            self.serial_port.write(cmd.encode('utf-8'))
+            time.sleep(0.05)
+
+            # 发送Kd
+            cmd = f"fc_set_rate_kd {kd_r} {kd_p} {kd_y}\r\n"
+            self.serial_port.write(cmd.encode('utf-8'))
+            time.sleep(0.05)
+
+            # 发送角速度上限
+            cmd = f"fc_set_rate_limit {rate}\r\n"
+            self.serial_port.write(cmd.encode('utf-8'))
+            time.sleep(0.05)
+
+            # 更新显示
+            params_text = f"当前参数:\nKp: {kp_r}, {kp_p}, {kp_y}\nKi: {ki_r}, {ki_p}, {ki_y}\nKd: {kd_r}, {kd_p}, {kd_y}\n上限: {rate} deg/s"
+            self.current_params_label.config(text=params_text)
+
+            self.log_message(f"参数已发送: Kp={kp_r}/{kp_p}/{kp_y}, Ki={ki_r}/{ki_p}/{ki_y}, Kd={kd_r}/{kd_p}/{kd_y}, Limit={rate}")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"发送失败: {str(e)}")
+
+    def query_pid_params(self):
+        """查询飞控当前PID参数"""
+        if not self.is_connected:
+            messagebox.showwarning("提示", "请先连接串口")
+            return
+
+        try:
+            cmd = "fc_show_rate_params\r\n"
+            self.serial_port.write(cmd.encode('utf-8'))
+            self.log_message("已发送参数查询命令")
+        except Exception as e:
+            messagebox.showerror("错误", f"发送失败: {str(e)}")
+
+    def update_tune_wave_view(self):
+        """切换波形显示"""
+        # 隐藏所有画布
+        self.canvas_gyro_tune.get_tk_widget().pack_forget()
+        self.canvas_angle_tune.get_tk_widget().pack_forget()
+        self.canvas_alt_tune.get_tk_widget().pack_forget()
+
+        # 显示选中的画布
+        wave_type = self.wave_type.get()
+        if wave_type == "gyro":
+            self.canvas_gyro_tune.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        elif wave_type == "angle":
+            self.canvas_angle_tune.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        elif wave_type == "alt":
+            self.canvas_alt_tune.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def apply_tune_ylim(self):
+        """应用Y轴范围设置"""
+        try:
+            y_min = self.ymin_scale.get()
+            y_max = self.ymax_scale.get()
+            wave_type = self.wave_type.get()
+
+            if wave_type == "gyro":
+                self.ax_gyro_tune.set_ylim(y_min, y_max)
+                self.canvas_gyro_tune.draw()
+            elif wave_type == "angle":
+                self.ax_angle_tune.set_ylim(y_min, y_max)
+                self.canvas_angle_tune.draw()
+            elif wave_type == "alt":
+                self.ax_alt_tune.set_ylim(y_min, y_max)
+                self.canvas_alt_tune.draw()
+
+            self.log_message(f"Y轴范围已设置: {y_min} ~ {y_max}")
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的数字")
+
+    def pan_left(self):
+        """波形左移（查看历史数据）"""
+        try:
+            self.tune_pan_manual = True  # 标记手动拖动
+            window = float(self.pan_window.get())
+            wave_type = self.wave_type.get()
+            current_time = time.time() - self.start_plot_time
+
+            # 获取当前X轴范围
+            xlim = self._get_ax(wave_type).get_xlim()
+            left = max(0, xlim[0] - window)
+            right = max(window, xlim[1] - window)
+
+            self._get_ax(wave_type).set_xlim(left, right)
+            self._get_canvas(wave_type).draw()
+            self.log_message(f"已左移查看历史，当前显示: {left:.1f}s ~ {right:.1f}s")
+        except Exception as e:
+            messagebox.showerror("错误", str(e))
+
+    def pan_right(self):
+        """波形右移（查看最新数据）"""
+        try:
+            self.tune_pan_manual = True  # 标记手动拖动
+            window = float(self.pan_window.get())
+            wave_type = self.wave_type.get()
+            current_time = time.time() - self.start_plot_time
+
+            # 获取当前X轴范围
+            xlim = self._get_ax(wave_type).get_xlim()
+            left = xlim[0] + window
+            right = min(current_time, xlim[1] + window)
+
+            self._get_ax(wave_type).set_xlim(left, right)
+            self._get_canvas(wave_type).draw()
+            self.log_message(f"已右移，当前显示: {left:.1f}s ~ {right:.1f}s")
+        except Exception as e:
+            messagebox.showerror("错误", str(e))
+
+    def pan_latest(self):
+        """跳转到最新数据"""
+        try:
+            self.tune_pan_manual = False  # 恢复自动滚动
+            window = float(self.pan_window.get())
+            wave_type = self.wave_type.get()
+            current_time = time.time() - self.start_plot_time
+
+            self._get_ax(wave_type).set_xlim(current_time - window, current_time)
+            self._get_canvas(wave_type).draw()
+            self.log_message(f"已跳转到最新，当前显示: {current_time - window:.1f}s ~ {current_time:.1f}s")
+        except Exception as e:
+            messagebox.showerror("错误", str(e))
+
+    def _get_ax(self, wave_type):
+        """获取当前波形类型的axes"""
+        if wave_type == "gyro":
+            return self.ax_gyro_tune
+        elif wave_type == "angle":
+            return self.ax_angle_tune
+        elif wave_type == "alt":
+            return self.ax_alt_tune
+
+    def _get_canvas(self, wave_type):
+        """获取当前波形类型的canvas"""
+        if wave_type == "gyro":
+            return self.canvas_gyro_tune
+        elif wave_type == "angle":
+            return self.canvas_angle_tune
+        elif wave_type == "alt":
+            return self.canvas_alt_tune
 
     def toggle_connection(self):
         """切换串口连接/断开状态"""
@@ -588,6 +1028,25 @@ class DroneGroundStation:
                 self.rc_channels[12] = aux9
                 self.rc_channels[13] = aux10
 
+            # 功能码0xF1：PID参数（角速度环）
+            elif func_code == 0xF1 and data_len == 0x16:
+                # 解析22字节数据：Kp(Roll,Pitch,Yaw), Ki(3), Kd(3), limit
+                # 每个值 int16 * 100 发送
+                kp_roll = struct.unpack('<h', frame[4:6])[0] / 100.0
+                kp_pitch = struct.unpack('<h', frame[6:8])[0] / 100.0
+                kp_yaw = struct.unpack('<h', frame[8:10])[0] / 100.0
+                ki_roll = struct.unpack('<h', frame[10:12])[0] / 100.0
+                ki_pitch = struct.unpack('<h', frame[12:14])[0] / 100.0
+                ki_yaw = struct.unpack('<h', frame[14:16])[0] / 100.0
+                kd_roll = struct.unpack('<h', frame[16:18])[0] / 100.0
+                kd_pitch = struct.unpack('<h', frame[18:20])[0] / 100.0
+                kd_yaw = struct.unpack('<h', frame[20:22])[0] / 100.0
+                rate_limit = struct.unpack('<h', frame[22:24])[0]
+
+                # 更新参数显示（仅当在调参窗口时）
+                self.root.after(0, self._update_pid_display, kp_roll, kp_pitch, kp_yaw,
+                               ki_roll, ki_pitch, ki_yaw, kd_roll, kd_pitch, kd_yaw, rate_limit)
+
             # 记录数据
             self.append_data_log()
 
@@ -606,6 +1065,18 @@ class DroneGroundStation:
                     # 读取串口缓存数据
                     data = self.serial_port.read(self.serial_port.in_waiting)
                     buffer += data
+
+                    # 处理MSH命令返回的文本（非ANO帧）
+                    # 查找换行符，分割出行
+                    while b'\n' in buffer:
+                        line_end = buffer.index(b'\n')
+                        line = buffer[:line_end].decode('utf-8', errors='ignore').strip()
+                        buffer = buffer[line_end + 1:]
+                        # 解析PID参数返回
+                        if 'Rate Limit:' in line or 'Roll:' in line or 'Pitch:' in line or 'Yaw:' in line:
+                            self.parse_pid_response(line)
+                        elif line:
+                            self.log_message(f"飞控: {line}")
 
                     # 循环查找完整ANO帧
                     while frame_header in buffer:
@@ -631,6 +1102,66 @@ class DroneGroundStation:
                 if self.is_thread_running:
                     self.log_message(f"数据接收异常：{str(e)}")
                     time.sleep(0.5)
+
+    def parse_pid_response(self, line):
+        """解析PID参数返回文本"""
+        try:
+            # 解析 "Rate Limit: 666.0 deg/s"
+            if "Rate Limit:" in line:
+                limit = float(line.split(':')[1].strip().split()[0])
+                self.current_rate_limit = limit
+
+            # 解析 "Roll:  Kp=0.040, Ki=0.000, Kd=0.000"
+            elif "Roll:" in line:
+                parts = line.split(',')
+                kp = float(parts[0].split('=')[1])
+                ki = float(parts[1].split('=')[1])
+                kd = float(parts[2].split('=')[1])
+                self.current_pid_rate_roll = {'kp': kp, 'ki': ki, 'kd': kd}
+
+            elif "Pitch:" in line:
+                parts = line.split(',')
+                kp = float(parts[0].split('=')[1])
+                ki = float(parts[1].split('=')[1])
+                kd = float(parts[2].split('=')[1])
+                self.current_pid_rate_pitch = {'kp': kp, 'ki': ki, 'kd': kd}
+
+            elif "Yaw:" in line:
+                parts = line.split(',')
+                kp = float(parts[0].split('=')[1])
+                ki = float(parts[1].split('=')[1])
+                kd = float(parts[2].split('=')[1])
+                self.current_pid_rate_yaw = {'kp': kp, 'ki': ki, 'kd': kd}
+
+            # 更新显示
+            if hasattr(self, 'current_pid_rate_roll') and hasattr(self, 'current_pid_rate_pitch') and \
+               hasattr(self, 'current_pid_rate_yaw') and hasattr(self, 'current_rate_limit'):
+                params_text = f"当前参数:\nKp: {self.current_pid_rate_roll['kp']:.3f}, {self.current_pid_rate_pitch['kp']:.3f}, {self.current_pid_rate_yaw['kp']:.3f}\nKi: {self.current_pid_rate_roll['ki']:.3f}, {self.current_pid_rate_pitch['ki']:.3f}, {self.current_pid_rate_yaw['ki']:.3f}\nKd: {self.current_pid_rate_roll['kd']:.3f}, {self.current_pid_rate_pitch['kd']:.3f}, {self.current_pid_rate_yaw['kd']:.3f}\n上限: {self.current_rate_limit:.0f} deg/s"
+                self.current_params_label.config(text=params_text)
+                # 更新输入框
+                self.kp_roll.delete(0, tk.END)
+                self.kp_roll.insert(0, f"{self.current_pid_rate_roll['kp']:.2f}")
+                self.kp_pitch.delete(0, tk.END)
+                self.kp_pitch.insert(0, f"{self.current_pid_rate_pitch['kp']:.2f}")
+                self.kp_yaw.delete(0, tk.END)
+                self.kp_yaw.insert(0, f"{self.current_pid_rate_yaw['kp']:.2f}")
+                self.ki_roll.delete(0, tk.END)
+                self.ki_roll.insert(0, f"{self.current_pid_rate_roll['ki']:.2f}")
+                self.ki_pitch.delete(0, tk.END)
+                self.ki_pitch.insert(0, f"{self.current_pid_rate_pitch['ki']:.2f}")
+                self.ki_yaw.delete(0, tk.END)
+                self.ki_yaw.insert(0, f"{self.current_pid_rate_yaw['ki']:.2f}")
+                self.kd_roll.delete(0, tk.END)
+                self.kd_roll.insert(0, f"{self.current_pid_rate_roll['kd']:.2f}")
+                self.kd_pitch.delete(0, tk.END)
+                self.kd_pitch.insert(0, f"{self.current_pid_rate_pitch['kd']:.2f}")
+                self.kd_yaw.delete(0, tk.END)
+                self.kd_yaw.insert(0, f"{self.current_pid_rate_yaw['kd']:.2f}")
+                self.rate_limit.delete(0, tk.END)
+                self.rate_limit.insert(0, f"{int(self.current_rate_limit)}")
+
+        except Exception as e:
+            pass  # 解析失败忽略
     # ======================================================================
 
     def simulate_data_thread(self):
@@ -869,19 +1400,14 @@ class DroneGroundStation:
         self.canvas_3d.draw()
 
     def update_2d_curve(self):
-        """更新2D四元数实时曲线"""
+        """更新陀螺仪原始数据曲线（替代四元数曲线）"""
         current_time = time.time() - self.start_plot_time
-        # 追加最新四元数数据
+        gyro_data = self.imu_raw['gyro']
+        # 追加最新陀螺仪数据（原始值已经是 *100 后的 deg/s）
         self.time_history.append(current_time)
-        q0, q1, q2, q3 = self.quaternion
-        self.roll_history.append(q0)
-        self.pitch_history.append(q1)
-        self.yaw_history.append(q2)
-
-        # 需要更多历史数据存储q3
-        if not hasattr(self, 'q3_history'):
-            self.q3_history = []
-        self.q3_history.append(q3)
+        self.roll_history.append(gyro_data[0])  # GyroX
+        self.pitch_history.append(gyro_data[1])  # GyroY
+        self.yaw_history.append(gyro_data[2])    # GyroZ
 
         # 限制历史数据长度，防止内存溢出
         if len(self.time_history) > self.max_history:
@@ -889,17 +1415,18 @@ class DroneGroundStation:
             self.roll_history.pop(0)
             self.pitch_history.pop(0)
             self.yaw_history.pop(0)
-            if hasattr(self, 'q3_history'):
-                self.q3_history.pop(0)
 
         # 更新曲线数据
         self.line_q0.set_data(self.time_history, self.roll_history)
         self.line_q1.set_data(self.time_history, self.pitch_history)
         self.line_q2.set_data(self.time_history, self.yaw_history)
-        if hasattr(self, 'q3_history'):
-            self.line_q3.set_data(self.time_history, self.q3_history)
         # 动态调整X轴范围
         self.ax_2d.set_xlim(max(0, current_time - self.max_history * 0.05), current_time)
+        # 自动调整Y轴范围以放大显示
+        if self.roll_history:
+            y_min = min(min(self.roll_history), min(self.pitch_history), min(self.yaw_history)) * 1.2
+            y_max = max(max(self.roll_history), max(self.pitch_history), max(self.yaw_history)) * 1.2
+            self.ax_2d.set_ylim(y_min, y_max)
         self.canvas_2d.draw()
 
     def update_imu_curve(self):
@@ -942,6 +1469,82 @@ class DroneGroundStation:
             y_max = max(max(all_acc), max(all_gyro)) * 1.2
             self.ax_imu.set_ylim(y_min, y_max)
         self.canvas_imu.draw()
+
+    def update_tune_curves(self):
+        """更新调参窗口的波形曲线（只绘制当前显示的波形）"""
+        current_time = time.time() - self.start_plot_time
+        wave_type = self.wave_type.get()
+
+        # 角速度数据（放大显示）
+        gyro_data = self.imu_raw['gyro']
+        if not hasattr(self, 'gyro_t_history'):
+            self.gyro_t_history = {'x': [], 'y': [], 'z': []}
+            self.time_t_history = []
+
+        self.time_t_history.append(current_time)
+        self.gyro_t_history['x'].append(gyro_data[0])
+        self.gyro_t_history['y'].append(gyro_data[1])
+        self.gyro_t_history['z'].append(gyro_data[2])
+
+        # 限制历史长度
+        if len(self.time_t_history) > self.max_history:
+            self.time_t_history.pop(0)
+            self.gyro_t_history['x'].pop(0)
+            self.gyro_t_history['y'].pop(0)
+            self.gyro_t_history['z'].pop(0)
+
+        # 只绘制当前选中的波形
+        if wave_type == "gyro":
+            # 更新角速度曲线
+            self.gyro_t_x.set_data(self.time_t_history, self.gyro_t_history['x'])
+            self.gyro_t_y.set_data(self.time_t_history, self.gyro_t_history['y'])
+            self.gyro_t_z.set_data(self.time_t_history, self.gyro_t_history['z'])
+            # 只有在非手动拖动状态下才自动滚动
+            if not getattr(self, 'tune_pan_manual', False):
+                self.ax_gyro_tune.set_xlim(max(0, current_time - 5), current_time)
+            self.canvas_gyro_tune.draw()
+        elif wave_type == "angle":
+            # 角度数据
+            if not hasattr(self, 'angle_t_history'):
+                self.angle_t_history = {'roll': [], 'pitch': [], 'yaw': []}
+
+            self.angle_t_history['roll'].append(self.euler_angles['roll'])
+            self.angle_t_history['pitch'].append(self.euler_angles['pitch'])
+            self.angle_t_history['yaw'].append(self.euler_angles['yaw'])
+
+            if len(self.angle_t_history['roll']) > self.max_history:
+                self.angle_t_history['roll'].pop(0)
+                self.angle_t_history['pitch'].pop(0)
+                self.angle_t_history['yaw'].pop(0)
+
+            # 更新角度曲线
+            self.angle_t_roll.set_data(self.time_t_history, self.angle_t_history['roll'])
+            self.angle_t_pitch.set_data(self.time_t_history, self.angle_t_history['pitch'])
+            self.angle_t_yaw.set_data(self.time_t_history, self.angle_t_history['yaw'])
+            if not getattr(self, 'tune_pan_manual', False):
+                self.ax_angle_tune.set_xlim(max(0, current_time - 5), current_time)
+            self.canvas_angle_tune.draw()
+        elif wave_type == "alt":
+            # 高度数据（气压计）
+            alt_data = self.sensor_data['alt_bar']
+            self.alt_history.append(alt_data)
+
+            if len(self.alt_history) > self.max_history:
+                self.alt_history.pop(0)
+
+            # 更新高度曲线
+            self.alt_t_data.set_data(self.time_t_history, self.alt_history)
+            if not getattr(self, 'tune_pan_manual', False):
+                self.ax_alt_tune.set_xlim(max(0, current_time - 5), current_time)
+            # 自动调整高度Y轴范围
+            if self.alt_history:
+                y_min = min(self.alt_history) * 0.9
+                y_max = max(self.alt_history) * 1.1
+                if y_min == y_max:
+                    y_min -= 50
+                    y_max += 50
+                self.ax_alt_tune.set_ylim(y_min, y_max)
+            self.canvas_alt_tune.draw()
 
     def update_display(self):
         """定时刷新GUI界面数据"""
@@ -1011,6 +1614,10 @@ class DroneGroundStation:
                 # 更新可视化图形
                 self.update_3d_attitude()
                 self.update_2d_curve()
+
+                # 调参窗口波形更新
+                if self.current_view == "tune" and hasattr(self, 'tune_initialized'):
+                    self.update_tune_curves()
 
         except Exception as e:
             pass
