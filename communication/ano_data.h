@@ -11,18 +11,18 @@
 #define ANO_SEND_GPS     0 // 发送GPS数据 (0x30)
 #define ANO_SEND_BARO    0 // 发送气压计数据 (0x02)
 #define ANO_SEND_RC      1 // 发送遥控器数据 (0x40)
+#define ANO_SEND_PID     1 // 发送PID参数 (0xF1)
 
-void ANO_DT_Send_Data(float A, float B, float C);
-void ANO_DT_Send_IMU_RawData(int16_t Ax, int16_t Ay, int16_t Az, int16_t Gx, int16_t Gy, int16_t Gz, uint8_t SHOCK_STA);
-void ANO_DT_Send_Euler_Angles(float A, float B, float C);
-void ANO_DT_Send_Att_RawData(float V0, float V1, float V2, float V3);
-void ANO_DT_Send_Sensor_Data(int16_t mag_x, int16_t mag_y, int16_t mag_z, int32_t alt_bar, int16_t temp, uint8_t bar_sta, uint8_t mag_sta);
-void ANO_DT_Send_RC_ChData(int16_t rol, int16_t pit, int16_t thr, int16_t yaw,
-                           int16_t aux1, int16_t aux2, int16_t aux3, int16_t aux4,
-                           int16_t aux5, int16_t aux6);
-void ANO_DT_Send_RC_ExData(int16_t aux7, int16_t aux8, int16_t aux9, int16_t aux10);
-void ANO_DT_Send_GPS_Data(uint8_t fix_sta, uint8_t s_num,
-                          int32_t lng, int32_t lat, int32_t alt_gps,
-                          int16_t n_spe, int16_t e_spe, int16_t d_spe,
-                          uint8_t pdop, uint8_t sacc, uint8_t vacc);
+// PID参数发送函数
+void ANO_DT_Send_PID_Params(float rate_kp_roll, float rate_kp_pitch, float rate_kp_yaw,
+                            float rate_ki_roll, float rate_ki_pitch, float rate_ki_yaw,
+                            float rate_kd_roll, float rate_kd_pitch, float rate_kd_yaw,
+                            float rate_limit);
+void ANO_DT_Send_Angle_PID(float angle_kp_roll, float angle_kp_pitch, float angle_kp_yaw,
+                           float angle_ki_roll, float angle_ki_pitch, float angle_ki_yaw,
+                           float angle_kd_roll, float angle_kd_pitch, float angle_kd_yaw,
+                           float angle_limit);
+void ANO_DT_Send_Pos_PID(float pos_kp_n, float pos_kp_e, float pos_ki_n, float pos_ki_e,
+                         float pos_kd_n, float pos_kd_e, float alt_kp, float alt_ki, float alt_kd,
+                         float alt_limit);
 #endif

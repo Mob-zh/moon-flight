@@ -2,12 +2,13 @@
 #include "bmp280.h"
 #include "bz121.h"
 #include "elrs.h"
+#include "flight_control.h"
 #include "icm42688.h"
 #include "imu.h"
 #include <rtthread.h>
 
 // ==================== 配置 ====================
-#define ANO_SEND_PERIOD 100 // 发送周期 (ms)
+#define ANO_SEND_PERIOD 10 // 发送周期 (ms)
 
 // ==================== 全局对象引用 ====================
 extern FLOAT_ANGLE  Att_Angle;       // 欧拉角
@@ -15,7 +16,9 @@ extern gpsDev_t     g_bz121_gps;     // GPS
 extern baroDev_t    g_bmp280_baro;   // 气压计
 extern accgyroDev_t g_icm_accgyro;   // 惯导设备
 extern elrsDev_t    g_elrs_receiver; // 遥控器接收
-
+extern FLOAT_XYZ    Gyr_filt;
+extern FLOAT_XYZ    Acc_filt;
+extern float        rate_limit;
 // ==================== ANO发送线程 ====================
 static void ano_send_thread_entry(void *parameter)
 {
@@ -25,8 +28,10 @@ static void ano_send_thread_entry(void *parameter)
     {
 #if ANO_SEND_EULER
         // 发送欧拉角 (0x03)
-        ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
-        rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
+        // ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
+        // 转弧度为角度再*100
+        ANO_DT_Send_IMU_RawData(0, 0, 0, (int16_t)(Gyr_filt.X * 180 / M_PI * 100), (int16_t)(Gyr_filt.Y * 180 / M_PI * 100), (int16_t)(Gyr_filt.Z * 180 / M_PI * 100), 0);
+        // rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
 #endif
 
 #if ANO_SEND_IMU_RAW
@@ -34,6 +39,13 @@ static void ano_send_thread_entry(void *parameter)
         ANO_DT_Send_IMU_RawData(g_icm_accgyro.accData[0], g_icm_accgyro.accData[1],
                                 g_icm_accgyro.accData[2], g_icm_accgyro.gyroData[0],
                                 g_icm_accgyro.gyroData[1], g_icm_accgyro.gyroData[2], 0);
+#endif
+
+#if ANO_SEND_PID
+        ANO_DT_Send_PID_Params(g_flight_control.pid_rate_roll.kp, g_flight_control.pid_rate_pitch.kp, g_flight_control.pid_rate_yaw.kp,
+                               g_flight_control.pid_rate_roll.ki, g_flight_control.pid_rate_pitch.ki, g_flight_control.pid_rate_yaw.ki,
+                               g_flight_control.pid_rate_roll.kd, g_flight_control.pid_rate_pitch.kd, g_flight_control.pid_rate_yaw.kd,
+                               rate_limit);
 #endif
 
 #if ANO_SEND_GPS

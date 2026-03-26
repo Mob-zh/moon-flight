@@ -298,6 +298,198 @@ void ANO_DT_Send_GPS_Data(
     ano_send_data(BUFF, _cnt);
 }
 
+// PID参数发送函数 (0xF1)
+// 发送角速度环的Kp、Ki、Kd参数和角速度上限
+void ANO_DT_Send_PID_Params(float rate_kp_roll, float rate_kp_pitch, float rate_kp_yaw,
+                            float rate_ki_roll, float rate_ki_pitch, float rate_ki_yaw,
+                            float rate_kd_roll, float rate_kd_pitch, float rate_kd_yaw,
+                            float rate_limit)
+{
+#if ANO_SEND_PID
+    uint8_t BUFF[32];
+    uint8_t sumcheck = 0;
+    uint8_t addcheck = 0;
+    uint8_t _cnt     = 0;
+
+    // 将float转为int16乘以100发送（保持2位小数精度）
+    int16_t kp_r  = (int16_t)(rate_kp_roll * 100);
+    int16_t kp_p  = (int16_t)(rate_kp_pitch * 100);
+    int16_t kp_y  = (int16_t)(rate_kp_yaw * 100);
+    int16_t ki_r  = (int16_t)(rate_ki_roll * 100);
+    int16_t ki_p  = (int16_t)(rate_ki_pitch * 100);
+    int16_t ki_y  = (int16_t)(rate_ki_yaw * 100);
+    int16_t kd_r  = (int16_t)(rate_kd_roll * 100);
+    int16_t kd_p  = (int16_t)(rate_kd_pitch * 100);
+    int16_t kd_y  = (int16_t)(rate_kd_yaw * 100);
+    int16_t limit = (int16_t)(rate_limit); // 角速度上限
+
+    BUFF[_cnt++] = 0xAA; // 帧头
+    BUFF[_cnt++] = 0xFF; // 目标地址
+    BUFF[_cnt++] = 0xF1; // 功能码：PID参数
+    BUFF[_cnt++] = 20;   // 数据长度：22字节
+
+    // Kp: Roll, Pitch, Yaw
+    BUFF[_cnt++] = BYTE0(kp_r);
+    BUFF[_cnt++] = BYTE1(kp_r);
+    BUFF[_cnt++] = BYTE0(kp_p);
+    BUFF[_cnt++] = BYTE1(kp_p);
+    BUFF[_cnt++] = BYTE0(kp_y);
+    BUFF[_cnt++] = BYTE1(kp_y);
+
+    // Ki: Roll, Pitch, Yaw
+    BUFF[_cnt++] = BYTE0(ki_r);
+    BUFF[_cnt++] = BYTE1(ki_r);
+    BUFF[_cnt++] = BYTE0(ki_p);
+    BUFF[_cnt++] = BYTE1(ki_p);
+    BUFF[_cnt++] = BYTE0(ki_y);
+    BUFF[_cnt++] = BYTE1(ki_y);
+
+    // Kd: Roll, Pitch, Yaw
+    BUFF[_cnt++] = BYTE0(kd_r);
+    BUFF[_cnt++] = BYTE1(kd_r);
+    BUFF[_cnt++] = BYTE0(kd_p);
+    BUFF[_cnt++] = BYTE1(kd_p);
+    BUFF[_cnt++] = BYTE0(kd_y);
+    BUFF[_cnt++] = BYTE1(kd_y);
+
+    // 角速度上限
+    BUFF[_cnt++] = BYTE0(limit);
+    BUFF[_cnt++] = BYTE1(limit);
+
+    // 校验和
+    for (uint8_t i = 0; i < BUFF[3] + 4; i++)
+    {
+        sumcheck += BUFF[i];
+        addcheck += sumcheck;
+    }
+    BUFF[_cnt++] = sumcheck;
+    BUFF[_cnt++] = addcheck;
+
+    ano_send_data(BUFF, _cnt);
+#endif
+}
+
+// 角度环PID参数发送函数 (0xF2)
+void ANO_DT_Send_Angle_PID(float angle_kp_roll, float angle_kp_pitch, float angle_kp_yaw,
+                           float angle_ki_roll, float angle_ki_pitch, float angle_ki_yaw,
+                           float angle_kd_roll, float angle_kd_pitch, float angle_kd_yaw,
+                           float angle_limit)
+{
+#if ANO_SEND_PID
+    uint8_t BUFF[32];
+    uint8_t sumcheck = 0;
+    uint8_t addcheck = 0;
+    uint8_t _cnt     = 0;
+
+    int16_t kp_r  = (int16_t)(angle_kp_roll * 100);
+    int16_t kp_p  = (int16_t)(angle_kp_pitch * 100);
+    int16_t kp_y  = (int16_t)(angle_kp_yaw * 100);
+    int16_t ki_r  = (int16_t)(angle_ki_roll * 100);
+    int16_t ki_p  = (int16_t)(angle_ki_pitch * 100);
+    int16_t ki_y  = (int16_t)(angle_ki_yaw * 100);
+    int16_t kd_r  = (int16_t)(angle_kd_roll * 100);
+    int16_t kd_p  = (int16_t)(angle_kd_pitch * 100);
+    int16_t kd_y  = (int16_t)(angle_kd_yaw * 100);
+    int16_t limit = (int16_t)(angle_limit);
+
+    BUFF[_cnt++] = 0xAA;
+    BUFF[_cnt++] = 0xFF;
+    BUFF[_cnt++] = 0xF2; // 功能码：角度环PID
+    BUFF[_cnt++] = 20;
+
+    BUFF[_cnt++] = BYTE0(kp_r);
+    BUFF[_cnt++] = BYTE1(kp_r);
+    BUFF[_cnt++] = BYTE0(kp_p);
+    BUFF[_cnt++] = BYTE1(kp_p);
+    BUFF[_cnt++] = BYTE0(kp_y);
+    BUFF[_cnt++] = BYTE1(kp_y);
+    BUFF[_cnt++] = BYTE0(ki_r);
+    BUFF[_cnt++] = BYTE1(ki_r);
+    BUFF[_cnt++] = BYTE0(ki_p);
+    BUFF[_cnt++] = BYTE1(ki_p);
+    BUFF[_cnt++] = BYTE0(ki_y);
+    BUFF[_cnt++] = BYTE1(ki_y);
+    BUFF[_cnt++] = BYTE0(kd_r);
+    BUFF[_cnt++] = BYTE1(kd_r);
+    BUFF[_cnt++] = BYTE0(kd_p);
+    BUFF[_cnt++] = BYTE1(kd_p);
+    BUFF[_cnt++] = BYTE0(kd_y);
+    BUFF[_cnt++] = BYTE1(kd_y);
+    BUFF[_cnt++] = BYTE0(limit);
+    BUFF[_cnt++] = BYTE1(limit);
+
+    for (uint8_t i = 0; i < BUFF[3] + 4; i++)
+    {
+        sumcheck += BUFF[i];
+        addcheck += sumcheck;
+    }
+    BUFF[_cnt++] = sumcheck;
+    BUFF[_cnt++] = addcheck;
+
+    ano_send_data(BUFF, _cnt);
+#endif
+}
+
+// 位置环PID参数发送函数 (0xF3)
+void ANO_DT_Send_Pos_PID(float pos_kp_n, float pos_kp_e, float pos_ki_n, float pos_ki_e,
+                         float pos_kd_n, float pos_kd_e, float alt_kp, float alt_ki, float alt_kd,
+                         float alt_limit)
+{
+#if ANO_SEND_PID
+    uint8_t BUFF[32];
+    uint8_t sumcheck = 0;
+    uint8_t addcheck = 0;
+    uint8_t _cnt     = 0;
+
+    int16_t p_kp_n = (int16_t)(pos_kp_n * 100);
+    int16_t p_kp_e = (int16_t)(pos_kp_e * 100);
+    int16_t p_ki_n = (int16_t)(pos_ki_n * 100);
+    int16_t p_ki_e = (int16_t)(pos_ki_e * 100);
+    int16_t p_kd_n = (int16_t)(pos_kd_n * 100);
+    int16_t p_kd_e = (int16_t)(pos_kd_e * 100);
+    int16_t a_kp   = (int16_t)(alt_kp * 100);
+    int16_t a_ki   = (int16_t)(alt_ki * 100);
+    int16_t a_kd   = (int16_t)(alt_kd * 100);
+    int16_t limit  = (int16_t)(alt_limit);
+
+    BUFF[_cnt++] = 0xAA;
+    BUFF[_cnt++] = 0xFF;
+    BUFF[_cnt++] = 0xF3; // 功能码：位置环PID
+    BUFF[_cnt++] = 20;
+
+    BUFF[_cnt++] = BYTE0(p_kp_n);
+    BUFF[_cnt++] = BYTE1(p_kp_n);
+    BUFF[_cnt++] = BYTE0(p_kp_e);
+    BUFF[_cnt++] = BYTE1(p_kp_e);
+    BUFF[_cnt++] = BYTE0(p_ki_n);
+    BUFF[_cnt++] = BYTE1(p_ki_n);
+    BUFF[_cnt++] = BYTE0(p_ki_e);
+    BUFF[_cnt++] = BYTE1(p_ki_e);
+    BUFF[_cnt++] = BYTE0(p_kd_n);
+    BUFF[_cnt++] = BYTE1(p_kd_n);
+    BUFF[_cnt++] = BYTE0(p_kd_e);
+    BUFF[_cnt++] = BYTE1(p_kd_e);
+    BUFF[_cnt++] = BYTE0(a_kp);
+    BUFF[_cnt++] = BYTE1(a_kp);
+    BUFF[_cnt++] = BYTE0(a_ki);
+    BUFF[_cnt++] = BYTE1(a_ki);
+    BUFF[_cnt++] = BYTE0(a_kd);
+    BUFF[_cnt++] = BYTE1(a_kd);
+    BUFF[_cnt++] = BYTE0(limit);
+    BUFF[_cnt++] = BYTE1(limit);
+
+    for (uint8_t i = 0; i < BUFF[3] + 4; i++)
+    {
+        sumcheck += BUFF[i];
+        addcheck += sumcheck;
+    }
+    BUFF[_cnt++] = sumcheck;
+    BUFF[_cnt++] = addcheck;
+
+    ano_send_data(BUFF, _cnt);
+#endif
+}
+
 #else
 
 void ANO_DT_Send_Euler_Angles(float A, float B, float C) {}
@@ -310,4 +502,19 @@ void ANO_DT_Send_GPS_Data(uint8_t fix_sta, uint8_t s_num,
                           int32_t lng, int32_t lat, int32_t alt_gps,
                           int16_t n_spe, int16_t e_spe, int16_t d_spe,
                           uint8_t pdop, uint8_t sacc, uint8_t vacc) {}
+
+void ANO_DT_Send_PID_Params(float rate_kp_roll, float rate_kp_pitch, float rate_kp_yaw,
+                            float rate_ki_roll, float rate_ki_pitch, float rate_ki_yaw,
+                            float rate_kd_roll, float rate_kd_pitch, float rate_kd_yaw,
+                            float rate_limit) {}
+
+void ANO_DT_Send_Angle_PID(float angle_kp_roll, float angle_kp_pitch, float angle_kp_yaw,
+                           float angle_ki_roll, float angle_ki_pitch, float angle_ki_yaw,
+                           float angle_kd_roll, float angle_kd_pitch, float angle_kd_yaw,
+                           float angle_limit) {}
+
+void ANO_DT_Send_Pos_PID(float pos_kp_n, float pos_kp_e, float pos_ki_n, float pos_ki_e,
+                         float pos_kd_n, float pos_kd_e, float alt_kp, float alt_ki, float alt_kd,
+                         float alt_limit) {}
+
 #endif
