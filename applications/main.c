@@ -11,24 +11,31 @@
 
 /* defined the led1 pin: pc2 */
 #define LED1_PIN GET_PIN(C, 2)
+rt_uint32_t speed = 100;
+
+uint16_t imu_cnt = 0;
+uint16_t pid_cnt = 0;
+
+void flight_init_entry(void *parameter)
+{
+    flight_init();
+    speed = 500;
+}
 
 int main(void)
 {
-    rt_uint32_t speed = 500;
     /* set led2 pin mode to output */
     rt_pin_mode(LED1_PIN, PIN_MODE_OUTPUT);
 
-    flight_init();
+    rt_thread_t flight_init_thread = rt_thread_create("flight_init", flight_init_entry, NULL, 2048, 5, 10);
+    rt_thread_startup(flight_init_thread);
 
-//    while (1)
-//    {
-//        // g_bmp280_baro.read_press(&g_bmp280_baro);
-//        // g_bmp280_baro.get_altitude(&g_bmp280_baro, 101325);
+    while (1)
+    {
+        rt_pin_write(LED1_PIN, PIN_LOW);
+        rt_thread_mdelay(speed);
 
-//        rt_pin_write(LED1_PIN, PIN_LOW);
-//        rt_thread_mdelay(speed);
-
-//        rt_pin_write(LED1_PIN, PIN_HIGH);
-//        rt_thread_mdelay(speed);
-//    }
+        rt_pin_write(LED1_PIN, PIN_HIGH);
+        rt_thread_mdelay(speed);
+    }
 }
