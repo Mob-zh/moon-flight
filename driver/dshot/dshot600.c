@@ -188,8 +188,8 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
     if (channel >= DSHOT_CHANNEL_MAX)
         return;
 
-    if (value > 1500)
-        value = 1500;
+    if (value > DSHOT_THROTTLE_MAX)
+        value = DSHOT_THROTTLE_MAX;
 
     // 更新通道状态
     channel_throttle[channel] = value;
