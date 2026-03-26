@@ -20,6 +20,7 @@ import time
 import struct
 import threading
 import csv
+from collections import deque
 from datetime import datetime
 import random
 
@@ -66,19 +67,19 @@ class DroneGroundStation:
         self.is_recording = False
         self.record_start_time = None
 
-        # 历史数据（用于绘图）
+        # 历史数据（使用deque替代list，避免pop(0)的O(n)问题）
         self.max_history = 1000  # 增加历史长度以显示阶跃响应
-        self.time_history = []
-        self.roll_history = []
-        self.pitch_history = []
-        self.yaw_history = []
+        self.time_history = deque(maxlen=self.max_history)
+        self.roll_history = deque(maxlen=self.max_history)
+        self.pitch_history = deque(maxlen=self.max_history)
+        self.yaw_history = deque(maxlen=self.max_history)
         # IMU原始数据历史
-        self.acc_x_history = []
-        self.acc_y_history = []
-        self.acc_z_history = []
-        self.gyro_x_history = []
-        self.gyro_y_history = []
-        self.gyro_z_history = []
+        self.acc_x_history = deque(maxlen=self.max_history)
+        self.acc_y_history = deque(maxlen=self.max_history)
+        self.acc_z_history = deque(maxlen=self.max_history)
+        self.gyro_x_history = deque(maxlen=self.max_history)
+        self.gyro_y_history = deque(maxlen=self.max_history)
+        self.gyro_z_history = deque(maxlen=self.max_history)
         self.start_plot_time = time.time()
 
         # 线程控制
@@ -405,6 +406,10 @@ class DroneGroundStation:
             self.rate_limit.delete(0, tk.END)
             self.rate_limit.insert(0, f"{limit:.0f}")
 
+            # 更新当前参数显示标签（动态从板子读取）
+            params_text = f"当前参数:\nKp: {kp_r:.2f}, {kp_p:.2f}, {kp_y:.2f}\nKi: {ki_r:.2f}, {ki_p:.2f}, {ki_y:.2f}\nKd: {kd_r:.2f}, {kd_p:.2f}, {kd_y:.2f}\n上限: {limit:.0f} deg/s"
+            self.current_params_label.config(text=params_text)
+
             self.log_message(f"收到PID参数: Kp({kp_r:.2f}/{kp_p:.2f}/{kp_y:.2f}) Ki({ki_r:.2f}/{ki_p:.2f}/{ki_y:.2f}) Kd({kd_r:.2f}/{kd_p:.2f}/{kd_y:.2f}) Limit={limit:.0f}")
         except Exception as e:
             self.log_message(f"更新PID显示失败: {e}")
@@ -474,45 +479,45 @@ class DroneGroundStation:
         ttk.Label(param_frame, text="Kp (比例):").grid(row=0, column=0, columnspan=6, sticky='w', padx=5, pady=3)
         ttk.Label(param_frame, text="Roll:").grid(row=1, column=0, padx=5, pady=2, sticky='e')
         self.kp_roll = ttk.Entry(param_frame, width=10)
-        self.kp_roll.insert(0, "")
+        self.kp_roll.insert(0, "0")
         self.kp_roll.grid(row=1, column=1, padx=5, pady=2)
         ttk.Label(param_frame, text="Pitch:").grid(row=1, column=2, padx=5, pady=2, sticky='e')
         self.kp_pitch = ttk.Entry(param_frame, width=10)
-        self.kp_pitch.insert(0, "")
+        self.kp_pitch.insert(0, "0")
         self.kp_pitch.grid(row=1, column=3, padx=5, pady=2)
         ttk.Label(param_frame, text="Yaw:").grid(row=1, column=4, padx=5, pady=2, sticky='e')
         self.kp_yaw = ttk.Entry(param_frame, width=10)
-        self.kp_yaw.insert(0, "")
+        self.kp_yaw.insert(0, "0")
         self.kp_yaw.grid(row=1, column=5, padx=5, pady=2)
 
         # Ki
         ttk.Label(param_frame, text="Ki (积分):").grid(row=2, column=0, columnspan=6, sticky='w', padx=5, pady=(8, 2))
         ttk.Label(param_frame, text="Roll:").grid(row=3, column=0, padx=5, pady=2, sticky='e')
         self.ki_roll = ttk.Entry(param_frame, width=10)
-        self.ki_roll.insert(0, "")
+        self.ki_roll.insert(0, "0")
         self.ki_roll.grid(row=3, column=1, padx=5, pady=2)
         ttk.Label(param_frame, text="Pitch:").grid(row=3, column=2, padx=5, pady=2, sticky='e')
         self.ki_pitch = ttk.Entry(param_frame, width=10)
-        self.ki_pitch.insert(0, "")
+        self.ki_pitch.insert(0, "0")
         self.ki_pitch.grid(row=3, column=3, padx=5, pady=2)
         ttk.Label(param_frame, text="Yaw:").grid(row=3, column=4, padx=5, pady=2, sticky='e')
         self.ki_yaw = ttk.Entry(param_frame, width=10)
-        self.ki_yaw.insert(0, "")
+        self.ki_yaw.insert(0, "0")
         self.ki_yaw.grid(row=3, column=5, padx=5, pady=2)
 
         # Kd
         ttk.Label(param_frame, text="Kd (微分):").grid(row=4, column=0, columnspan=6, sticky='w', padx=5, pady=(8, 2))
         ttk.Label(param_frame, text="Roll:").grid(row=5, column=0, padx=5, pady=2, sticky='e')
         self.kd_roll = ttk.Entry(param_frame, width=10)
-        self.kd_roll.insert(0, "")
+        self.kd_roll.insert(0, "0")
         self.kd_roll.grid(row=5, column=1, padx=5, pady=2)
         ttk.Label(param_frame, text="Pitch:").grid(row=5, column=2, padx=5, pady=2, sticky='e')
         self.kd_pitch = ttk.Entry(param_frame, width=10)
-        self.kd_pitch.insert(0, "")
+        self.kd_pitch.insert(0, "0")
         self.kd_pitch.grid(row=5, column=3, padx=5, pady=2)
         ttk.Label(param_frame, text="Yaw:").grid(row=5, column=4, padx=5, pady=2, sticky='e')
         self.kd_yaw = ttk.Entry(param_frame, width=10)
-        self.kd_yaw.insert(0, "")
+        self.kd_yaw.insert(0, "0")
         self.kd_yaw.grid(row=5, column=5, padx=5, pady=2)
 
         # 角速度上限
@@ -520,7 +525,7 @@ class DroneGroundStation:
         rate_frame.pack(fill=tk.X, pady=(0, 10))
         ttk.Label(rate_frame, text="deg/s:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
         self.rate_limit = ttk.Entry(rate_frame, width=10)
-        self.rate_limit.insert(0, "")
+        self.rate_limit.insert(0, "45")
         self.rate_limit.grid(row=0, column=1, padx=5, pady=5)
 
         # 发送按钮
@@ -555,30 +560,18 @@ class DroneGroundStation:
         ttk.Label(ylim_frame, text="Y轴:").pack(side=tk.LEFT, padx=5)
 
         # 下限滑条
-        self.ymin_scale = tk.Scale(ylim_frame, from_=-2000, to=2000, orient=tk.HORIZONTAL,
+        self.ymin_scale = tk.Scale(ylim_frame, from_=-900, to=900, orient=tk.HORIZONTAL,
                                    length=150, resolution=10, showvalue=True)
-        self.ymin_scale.set(-800)
+        self.ymin_scale.set(-900)
         self.ymin_scale.pack(side=tk.LEFT, padx=5)
 
         # 上限滑条
-        self.ymax_scale = tk.Scale(ylim_frame, from_=-2000, to=2000, orient=tk.HORIZONTAL,
+        self.ymax_scale = tk.Scale(ylim_frame, from_=-900, to=900, orient=tk.HORIZONTAL,
                                    length=150, resolution=10, showvalue=True)
-        self.ymax_scale.set(800)
+        self.ymax_scale.set(900)
         self.ymax_scale.pack(side=tk.LEFT, padx=5)
 
         ttk.Button(ylim_frame, text="应用", command=self.apply_tune_ylim).pack(side=tk.LEFT, padx=10)
-
-        # 波形导航控制
-        nav_frame = ttk.Frame(right_frame)
-        nav_frame.pack(fill=tk.X, pady=(0, 5))
-        ttk.Button(nav_frame, text="◀左移", command=self.pan_left).pack(side=tk.LEFT, padx=5)
-        ttk.Button(nav_frame, text="▶右移", command=self.pan_right).pack(side=tk.LEFT, padx=5)
-        ttk.Button(nav_frame, text="⏪最新", command=self.pan_latest).pack(side=tk.LEFT, padx=5)
-        ttk.Label(nav_frame, text="窗口:").pack(side=tk.LEFT, padx=(20, 5))
-        self.pan_window = ttk.Entry(nav_frame, width=5)
-        self.pan_window.insert(0, "5")
-        self.pan_window.pack(side=tk.LEFT, padx=5)
-        ttk.Label(nav_frame, text="秒").pack(side=tk.LEFT)
 
         # 波形画布容器
         self.wave_container = ttk.Frame(right_frame)
@@ -612,7 +605,7 @@ class DroneGroundStation:
         self.ax_gyro_tune.grid(True, alpha=0.3)
         self.ax_gyro_tune.set_ylim(-800, 800)
         # 增加历史数据长度
-        self.max_history = 1000
+        self.max_history = 100
         self.gyro_t_x, = self.ax_gyro_tune.plot([], [], '#E74C3C', label='Roll', linewidth=1.5)
         self.gyro_t_y, = self.ax_gyro_tune.plot([], [], '#27AE60', label='Pitch', linewidth=1.5)
         self.gyro_t_z, = self.ax_gyro_tune.plot([], [], '#3498DB', label='Yaw', linewidth=1.5)
@@ -642,12 +635,17 @@ class DroneGroundStation:
         self.ax_alt_tune.legend(loc='upper right', fontsize=9)
 
         # 高度历史数据
-        self.alt_history = []
+        self.alt_history = deque(maxlen=self.max_history)
 
     def send_tune_params(self):
         """发送调参参数到飞控"""
+        self.log_message(f"发送参数按钮被点击, is_connected={self.is_connected}")
         if not self.is_connected:
             messagebox.showwarning("提示", "请先连接串口")
+            return
+
+        if not self.serial_port or not self.serial_port.is_open:
+            messagebox.showwarning("提示", "串口未打开")
             return
 
         try:
@@ -663,24 +661,30 @@ class DroneGroundStation:
             kd_y = self.kd_yaw.get().strip()
             rate = self.rate_limit.get().strip()
 
+            self.log_message(f"准备发送参数: Kp={kp_r}/{kp_p}/{kp_y}, Ki={ki_r}/{ki_p}/{ki_y}, Kd={kd_r}/{kd_p}/{kd_y}, Limit={rate}")
+
             # 发送Kp
             cmd = f"fc_set_rate_kp {kp_r} {kp_p} {kp_y}\r\n"
             self.serial_port.write(cmd.encode('utf-8'))
+            self.log_message(f"已发送: {cmd.strip()}")
             time.sleep(0.05)
 
             # 发送Ki
             cmd = f"fc_set_rate_ki {ki_r} {ki_p} {ki_y}\r\n"
             self.serial_port.write(cmd.encode('utf-8'))
+            self.log_message(f"已发送: {cmd.strip()}")
             time.sleep(0.05)
 
             # 发送Kd
             cmd = f"fc_set_rate_kd {kd_r} {kd_p} {kd_y}\r\n"
             self.serial_port.write(cmd.encode('utf-8'))
+            self.log_message(f"已发送: {cmd.strip()}")
             time.sleep(0.05)
 
             # 发送角速度上限
             cmd = f"fc_set_rate_limit {rate}\r\n"
             self.serial_port.write(cmd.encode('utf-8'))
+            self.log_message(f"已发送: {cmd.strip()}")
             time.sleep(0.05)
 
             # 更新显示
@@ -1029,7 +1033,7 @@ class DroneGroundStation:
                 self.rc_channels[13] = aux10
 
             # 功能码0xF1：PID参数（角速度环）
-            elif func_code == 0xF1 and data_len == 0x16:
+            elif func_code == 0xF1 and data_len == 0x14:
                 # 解析22字节数据：Kp(Roll,Pitch,Yaw), Ki(3), Kd(3), limit
                 # 每个值 int16 * 100 发送
                 kp_roll = struct.unpack('<h', frame[4:6])[0] / 100.0
@@ -1404,17 +1408,11 @@ class DroneGroundStation:
         current_time = time.time() - self.start_plot_time
         gyro_data = self.imu_raw['gyro']
         # 追加最新陀螺仪数据（原始值已经是 *100 后的 deg/s）
+        # deque maxlen自动限制长度，无需手动pop(0)
         self.time_history.append(current_time)
         self.roll_history.append(gyro_data[0])  # GyroX
         self.pitch_history.append(gyro_data[1])  # GyroY
         self.yaw_history.append(gyro_data[2])    # GyroZ
-
-        # 限制历史数据长度，防止内存溢出
-        if len(self.time_history) > self.max_history:
-            self.time_history.pop(0)
-            self.roll_history.pop(0)
-            self.pitch_history.pop(0)
-            self.yaw_history.pop(0)
 
         # 更新曲线数据
         self.line_q0.set_data(self.time_history, self.roll_history)
@@ -1433,6 +1431,7 @@ class DroneGroundStation:
         """更新IMU原始数据波形曲线"""
         current_time = time.time() - self.start_plot_time
         # 追加最新数据
+        # deque maxlen自动限制长度，无需手动pop(0)
         acc_data = self.imu_raw['acc']
         gyro_data = self.imu_raw['gyro']
         self.acc_x_history.append(acc_data[0])
@@ -1441,15 +1440,6 @@ class DroneGroundStation:
         self.gyro_x_history.append(gyro_data[0])
         self.gyro_y_history.append(gyro_data[1])
         self.gyro_z_history.append(gyro_data[2])
-
-        # 限制历史数据长度
-        if len(self.acc_x_history) > self.max_history:
-            self.acc_x_history.pop(0)
-            self.acc_y_history.pop(0)
-            self.acc_z_history.pop(0)
-            self.gyro_x_history.pop(0)
-            self.gyro_y_history.pop(0)
-            self.gyro_z_history.pop(0)
 
         # 更新曲线数据
         self.line_acc_x.set_data(self.time_history, self.acc_x_history)
@@ -1478,20 +1468,19 @@ class DroneGroundStation:
         # 角速度数据（放大显示）
         gyro_data = self.imu_raw['gyro']
         if not hasattr(self, 'gyro_t_history'):
-            self.gyro_t_history = {'x': [], 'y': [], 'z': []}
-            self.time_t_history = []
+            self.gyro_t_history = {
+                'x': deque(maxlen=self.max_history),
+                'y': deque(maxlen=self.max_history),
+                'z': deque(maxlen=self.max_history)
+            }
+            self.time_t_history = deque(maxlen=self.max_history)
 
         self.time_t_history.append(current_time)
         self.gyro_t_history['x'].append(gyro_data[0])
         self.gyro_t_history['y'].append(gyro_data[1])
         self.gyro_t_history['z'].append(gyro_data[2])
 
-        # 限制历史长度
-        if len(self.time_t_history) > self.max_history:
-            self.time_t_history.pop(0)
-            self.gyro_t_history['x'].pop(0)
-            self.gyro_t_history['y'].pop(0)
-            self.gyro_t_history['z'].pop(0)
+        # deque maxlen自动限制长度，无需手动pop(0)
 
         # 只绘制当前选中的波形
         if wave_type == "gyro":
@@ -1506,16 +1495,17 @@ class DroneGroundStation:
         elif wave_type == "angle":
             # 角度数据
             if not hasattr(self, 'angle_t_history'):
-                self.angle_t_history = {'roll': [], 'pitch': [], 'yaw': []}
+                self.angle_t_history = {
+                    'roll': deque(maxlen=self.max_history),
+                    'pitch': deque(maxlen=self.max_history),
+                    'yaw': deque(maxlen=self.max_history)
+                }
 
             self.angle_t_history['roll'].append(self.euler_angles['roll'])
             self.angle_t_history['pitch'].append(self.euler_angles['pitch'])
             self.angle_t_history['yaw'].append(self.euler_angles['yaw'])
 
-            if len(self.angle_t_history['roll']) > self.max_history:
-                self.angle_t_history['roll'].pop(0)
-                self.angle_t_history['pitch'].pop(0)
-                self.angle_t_history['yaw'].pop(0)
+            # deque maxlen自动限制长度，无需手动pop(0)
 
             # 更新角度曲线
             self.angle_t_roll.set_data(self.time_t_history, self.angle_t_history['roll'])
@@ -1527,10 +1517,8 @@ class DroneGroundStation:
         elif wave_type == "alt":
             # 高度数据（气压计）
             alt_data = self.sensor_data['alt_bar']
+            # deque maxlen自动限制长度，无需手动pop(0)
             self.alt_history.append(alt_data)
-
-            if len(self.alt_history) > self.max_history:
-                self.alt_history.pop(0)
 
             # 更新高度曲线
             self.alt_t_data.set_data(self.time_t_history, self.alt_history)
@@ -1620,10 +1608,10 @@ class DroneGroundStation:
                     self.update_tune_curves()
 
         except Exception as e:
-            pass
+            self.log_message(f"GUI更新错误: {e}")
 
-        # 定时刷新，50ms刷新一次
-        self.root.after(50, self.update_display)
+        # 定时刷新，200ms刷新一次（降低频率避免GUI卡死）
+        self.root.after(200, self.update_display)
 
     def on_close(self):
         """关闭窗口时的清理操作"""
