@@ -135,7 +135,7 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     ezInt *= 0.99f;
 
     // 动态计算Kp（根据角速度调整）
-    float current_Kp = IMU_CalcDynamicKp(gx, gy, gz);
+    float current_Kp = imu_Kp;
 
     // 将误差PI补偿到陀螺仪
     gx = gx + current_Kp * ex + exInt;
@@ -171,7 +171,7 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
 
     // 四元数转换成欧拉角(Z->Y->X)
     // 偏航角YAW - 使用阈值过滤减少漂移
-    if ((Gyr_filt->Z * RadtoDeg > 0.2f) || (Gyr_filt->Z * RadtoDeg < -0.2f))
+    if ((Gyr_filt->Z * RadtoDeg > 0.4f) || (Gyr_filt->Z * RadtoDeg < -0.4f))
     {
         Att_Angle->yaw += Gyr_filt->Z * RadtoDeg * halfT * 2.0f; // 0 - 2
     }
@@ -183,17 +183,6 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     Att_Angle->pit = -atan2(2.0f * q2 * q3 + 2.0f * q0 * q1, q0q0 - q1q1 - q2q2 + q3q3) * RadtoDeg;
 }
 
-uint32_t imu_thread_run_count = 0;
-// ==================== 线程入口函数 ====================
-static void IMU_update_thread_entry(void *parameter)
-{
-    // // char status[64];
-    // while (1)
-    // {
-    //     // 释放控制信号量，通知控制线程可以进行PID运算
-    // }
-}
-
 // ==================== IMU初始化函数 ====================
 void IMU_init(void)
 {
@@ -201,11 +190,6 @@ void IMU_init(void)
     imu_sem = rt_sem_create("imu_sem", 0, RT_IPC_FLAG_PRIO);
 
     accgyro_init(&g_icm_accgyro);
-
-    // 创建IMU更新线程
-    imu_thread = rt_thread_create("imu_update", IMU_update_thread_entry, RT_NULL, 1024, 11, 10);
-    if (imu_thread != RT_NULL)
-        rt_thread_startup(imu_thread);
 }
 
 void imu_set_Kp(int argc, char *argv[])

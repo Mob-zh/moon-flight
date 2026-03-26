@@ -29,41 +29,42 @@
 #define __AT32F435_437_WK_CONFIG_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* includes -----------------------------------------------------------------------*/
-#include "stdio.h"
 #include "at32f435_437.h"
-/* private includes -------------------------------------------------------------*/
-/* add user code begin private includes */
+#include "stdio.h"
+    /* private includes -------------------------------------------------------------*/
+    /* add user code begin private includes */
 
-/* add user code end private includes */
+    /* add user code end private includes */
 
-/* exported types -------------------------------------------------------------*/
-/* add user code begin exported types */
+    /* exported types -------------------------------------------------------------*/
+    /* add user code begin exported types */
 
-/* add user code end exported types */
+    /* add user code end exported types */
 
-/* exported constants --------------------------------------------------------*/
-/* add user code begin exported constants */
+    /* exported constants --------------------------------------------------------*/
+    /* add user code begin exported constants */
 
-/* add user code end exported constants */
+    /* add user code end exported constants */
 
-/* exported macro ------------------------------------------------------------*/
-/* add user code begin exported macro */
+    /* exported macro ------------------------------------------------------------*/
+    /* add user code begin exported macro */
 
-/* add user code end exported macro */
+    /* add user code end exported macro */
 
-/* add user code begin dma define */
-/* user can only modify the dma define value */
-//#define DMA1_CHANNEL1_BUFFER_SIZE      0
-//#define DMA1_CHANNEL1_MEMORY_BASE_ADDR 0
-    // #define DMA1_CHANNEL1_PERIPHERAL_BASE_ADDR  0
+    /* add user code begin dma define */
+    /* user can only modify the dma define value */
+    // #define DMA1_CHANNEL1_BUFFER_SIZE      0
+    // #define DMA1_CHANNEL1_MEMORY_BASE_ADDR 0
+    //  #define DMA1_CHANNEL1_PERIPHERAL_BASE_ADDR  0
 
-//#define DMA1_CHANNEL2_BUFFER_SIZE      0
-//#define DMA1_CHANNEL2_MEMORY_BASE_ADDR 0
-    // #define DMA1_CHANNEL2_PERIPHERAL_BASE_ADDR   0
+    // #define DMA1_CHANNEL2_BUFFER_SIZE      0
+    // #define DMA1_CHANNEL2_MEMORY_BASE_ADDR 0
+    //  #define DMA1_CHANNEL2_PERIPHERAL_BASE_ADDR   0
 
 #define DMA1_CHANNEL3_BUFFER_SIZE      0
 #define DMA1_CHANNEL3_MEMORY_BASE_ADDR 0
@@ -73,12 +74,12 @@ extern "C" {
 #define DMA1_CHANNEL4_MEMORY_BASE_ADDR 0
     // #define DMA1_CHANNEL4_PERIPHERAL_BASE_ADDR   0
 
-    #define DMA1_CHANNEL5_BUFFER_SIZE   0
-    #define DMA1_CHANNEL5_MEMORY_BASE_ADDR   0
+#define DMA1_CHANNEL5_BUFFER_SIZE      0
+#define DMA1_CHANNEL5_MEMORY_BASE_ADDR 0
     // #define DMA1_CHANNEL5_PERIPHERAL_BASE_ADDR   0
 
-    #define DMA1_CHANNEL6_BUFFER_SIZE   0
-    #define DMA1_CHANNEL6_MEMORY_BASE_ADDR   0
+#define DMA1_CHANNEL6_BUFFER_SIZE      0
+#define DMA1_CHANNEL6_MEMORY_BASE_ADDR 0
     // #define DMA1_CHANNEL6_PERIPHERAL_BASE_ADDR   0
 
     // #define DMA1_CHANNEL7_BUFFER_SIZE   0
@@ -162,42 +163,42 @@ extern "C" {
     // #define EDMA_STREAM8_LINK_LIST_POINTER   0
     /* add user code end dma define */
 
-/* exported functions ------------------------------------------------------- */
-  /* system clock config. */
-  void wk_system_clock_config(void);
+    /* exported functions ------------------------------------------------------- */
+    /* system clock config. */
+    void wk_system_clock_config(void);
 
-  /* config periph clock. */
-  void wk_periph_clock_config(void);
+    /* config periph clock. */
+    void wk_periph_clock_config(void);
 
-  /* nvic config. */
-  void wk_nvic_config(void);
+    /* nvic config. */
+    void wk_nvic_config(void);
 
-  /* init tmr1 function. */
-  void wk_tmr1_init(void);
+    /* init tmr1 function. */
+    void wk_tmr1_init(void);
 
-  /* init tmr3 function. */
-  void wk_tmr3_init(void);
+    /* init tmr3 function. */
+    void wk_tmr3_init(void);
 
-  /* init tmr4 function. */
-  void wk_tmr4_init(void);
+    /* init tmr4 function. */
+    void wk_tmr4_init(void);
 
-  /* init dma1 channel3 */
-  void wk_dma1_channel3_init(void);
+    /* init dma1 channel3 */
+    void wk_dma1_channel3_init(void);
 
-  /* init dma1 channel4 */
-  void wk_dma1_channel4_init(void);
+    /* init dma1 channel4 */
+    void wk_dma1_channel4_init(void);
 
-  /* init dma1 channel5 */
-  void wk_dma1_channel5_init(void);
+    /* init dma1 channel5 */
+    void wk_dma1_channel5_init(void);
 
-  /* init dma1 channel6 */
-  void wk_dma1_channel6_init(void);
+    /* init dma1 channel6 */
+    void wk_dma1_channel6_init(void);
 
-  /* config dma channel transfer parameter */
-  /* user need to modify parameters memory_base_addr and buffer_size */
-  void wk_dma_channel_config(dma_channel_type* dmax_channely, uint32_t peripheral_base_addr, uint32_t memory_base_addr, uint16_t buffer_size);
+    /* config dma channel transfer parameter */
+    /* user need to modify parameters memory_base_addr and buffer_size */
+    void wk_dma_channel_config(dma_channel_type *dmax_channely, uint32_t peripheral_base_addr, uint32_t memory_base_addr, uint16_t buffer_size);
 
-/* add user code begin exported functions */
+    /* add user code begin exported functions */
     void set_tmr_pwm_duty(tmr_type *tmr_x, tmr_channel_select_type ch, uint8_t duty);
 
     /* add user code end exported functions */

@@ -1,4 +1,5 @@
 #include "flight_control.h"
+#include "at32f435_437_wk_config.h"
 #include "dshot600.h"
 #include "elrs.h"
 #include "imu.h"
@@ -7,18 +8,18 @@
 #include <string.h>
 
 rt_sem_t control_sem;
-
 // 全局飞行控制实例
 flight_control_t g_flight_control;
 
 static void flight_control_thread_entry(void *parameter);
 
 // ==================== 常量 ====================
-#define MAX_ANGLE    45.0f // Angle模式最大角度 (deg)
-#define MAX_RATE     50.0f // 最大角速度 (deg/s)
-#define THROTTLE_MIN 0.1f  // 最小油门
-#define THROTTLE_MAX 1.0f  // 最大油门
-
+#define MAX_ANGLE    45.0f  // Angle模式最大角度 (deg)
+#define MAX_RATE     100.0f // 最大角速度 (deg/s)
+#define THROTTLE_MIN 0.1f   // 最小油门
+#define THROTTLE_MAX 1.0f   // 最大油门
+// 可调的角速度上限
+float rate_limit = 100.0f;
 // ==================== 工具函数 ====================
 
 // PID计算
@@ -82,24 +83,24 @@ void flight_control_init(flight_control_t *fc)
     memset(fc, 0, sizeof(flight_control_t));
 
     // 默认模式
-    fc->mode      = FLIGHT_MODE_ANGLE;
-    fc->prev_mode = FLIGHT_MODE_ANGLE;
+    fc->mode      = FLIGHT_MODE_ACRO;
+    fc->prev_mode = FLIGHT_MODE_ACRO;
 
     // 初始化PID参数
     // 角度环
-    pid_init(&fc->pid_angle_roll, 0.0f, 0.0f, 0.0f, MAX_RATE);
-    pid_init(&fc->pid_angle_pitch, 0.0f, 0.0f, 0.0f, MAX_RATE);
-    pid_init(&fc->pid_angle_yaw, 0.0f, 0.0f, 0.0f, MAX_RATE);
+    pid_init(&fc->pid_angle_roll, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
+    pid_init(&fc->pid_angle_pitch, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
+    pid_init(&fc->pid_angle_yaw, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
 
     // 角速度环
-    pid_init(&fc->pid_rate_roll, 0.0f, 0.0f, 0.0f, 0.0f);
-    pid_init(&fc->pid_rate_pitch, 0.0f, 0.0f, 0.0f, 0.0f);
-    pid_init(&fc->pid_rate_yaw, 0.0f, 0.0f, 0.0f, 0.0f);
+    pid_init(&fc->pid_rate_roll, 0.04f, 0.0f, 0.0f, rate_limit);
+    pid_init(&fc->pid_rate_pitch, -0.04f, 0.0f, 0.0f, rate_limit);
+    pid_init(&fc->pid_rate_yaw, 0.08f, 0.0f, 0.0f, rate_limit);
 
     // 位置环
-    pid_init(&fc->pid_pos_n, 0.0f, 0.0f, 0.0f, MAX_RATE);
-    pid_init(&fc->pid_pos_e, 0.0f, 0.0f, 0.0f, MAX_RATE);
-    pid_init(&fc->pid_alt, 0.0f, 0.0f, 0.0f, 0.0f);
+    pid_init(&fc->pid_pos_n, 0.0f, 0.0f, 0.0f, 0.0);
+    pid_init(&fc->pid_pos_e, 0.0f, 0.0f, 0.0f, 0.0);
+    pid_init(&fc->pid_alt, 0.0f, 0.0f, 0.0f, 0.0);
 
     // 电机输出初始化
     for (int i = 0; i < 4; i++)
@@ -142,9 +143,9 @@ void flight_control_update(flight_control_t *fc)
     {
     case FLIGHT_MODE_ACRO:
         // Acro模式：直接使用遥控器输入作为角速度目标
-        fc->desired_rate_roll  = fc->rc_roll * MAX_RATE;
-        fc->desired_rate_pitch = fc->rc_pitch * MAX_RATE;
-        fc->desired_rate_yaw   = fc->rc_yaw * MAX_RATE;
+        fc->desired_rate_roll  = fc->rc_roll * rate_limit;
+        fc->desired_rate_pitch = fc->rc_pitch * rate_limit;
+        fc->desired_rate_yaw   = fc->rc_yaw * rate_limit;
         break;
 
     case FLIGHT_MODE_ANGLE:
@@ -157,7 +158,7 @@ void flight_control_update(flight_control_t *fc)
         // 角度环PID（目标角度 -> 期望角速度）
         fc->desired_rate_roll  = pid_calculate(&fc->pid_angle_roll, cmd_roll, fc->actual_roll, dt);
         fc->desired_rate_pitch = pid_calculate(&fc->pid_angle_pitch, cmd_pitch, fc->actual_pitch, dt);
-        fc->desired_rate_yaw   = fc->rc_yaw * MAX_RATE; // Yaw保持Rate模式
+        fc->desired_rate_yaw   = fc->rc_yaw * rate_limit; // Yaw保持Rate模式
     }
     break;
     }
@@ -403,10 +404,15 @@ static void flight_control_thread_entry(void *parameter)
         float motor[4];
         flight_control_get_motor(fc, motor);
 
-        dshot600_send_packet(0, motor_to_dshot(motor[0], fc->armed));
-        dshot600_send_packet(1, motor_to_dshot(motor[1], fc->armed));
-        dshot600_send_packet(2, motor_to_dshot(motor[2], fc->armed));
-        dshot600_send_packet(3, motor_to_dshot(motor[3], fc->armed));
+        dshot600_send_packet(0, motor_to_dshot(motor[3], fc->armed)); // M4
+        dshot600_send_packet(1, motor_to_dshot(motor[2], fc->armed)); // M3
+        dshot600_send_packet(2, motor_to_dshot(motor[1], fc->armed)); // M2
+        dshot600_send_packet(3, motor_to_dshot(motor[0], fc->armed)); // M1
+
+        // dshot600_send_packet(0, 0x00); // M4
+        // dshot600_send_packet(1, 0x01); // M3
+        // dshot600_send_packet(2, 0x02); // M2
+        // dshot600_send_packet(3, 0x03); // M1
     }
 }
 
@@ -516,3 +522,94 @@ MSH_CMD_EXPORT(fc_arm, "arm/disarm flight control");
 MSH_CMD_EXPORT(fc_beep, "send beep command to ESC");
 MSH_CMD_EXPORT(fc_dir, "set motor rotation direction");
 MSH_CMD_EXPORT(fc_motor, "test motor with throttle");
+
+// ==================== 角速度环参数设置命令 ====================
+
+// 设置角速度环Kp值
+static void fc_set_rate_kp(int argc, char *argv[])
+{
+    if (argc < 4)
+    {
+        rt_kprintf("Usage: fc_set_rate_kp <roll> <pitch> <yaw>\n");
+        rt_kprintf("  Example: fc_set_rate_kp 2.0 -2.0 2.5\n");
+        return;
+    }
+
+    g_flight_control.pid_rate_roll.kp  = atof(argv[1]);
+    g_flight_control.pid_rate_pitch.kp = atof(argv[2]);
+    g_flight_control.pid_rate_yaw.kp   = atof(argv[3]);
+
+    char str[64];
+    snprintf(str, sizeof(str), "Rate Kp set: Roll=%.2f, Pitch=%.2f, Yaw=%.2f\n",
+             g_flight_control.pid_rate_roll.kp,
+             g_flight_control.pid_rate_pitch.kp,
+             g_flight_control.pid_rate_yaw.kp);
+    rt_kprintf(str);
+}
+
+// 设置角速度上限
+static void fc_set_rate_limit(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        rt_kprintf("Usage: fc_set_rate_limit <deg/s>\n");
+        rt_kprintf("  Current: %.1f deg/s\n", rate_limit);
+        rt_kprintf("  Example: fc_set_rate_limit 500\n");
+        return;
+    }
+
+    rate_limit = atof(argv[1]);
+
+    char str[64];
+    snprintf(str, sizeof(str), "Rate limit set to: %.1f deg/s\n", rate_limit);
+    rt_kprintf(str);
+}
+
+// 设置角速度环Ki值
+static void fc_set_rate_ki(int argc, char *argv[])
+{
+    if (argc < 4)
+    {
+        rt_kprintf("Usage: fc_set_rate_ki <roll> <pitch> <yaw>\n");
+        rt_kprintf("  Example: fc_set_rate_ki 0.05 0.05 0.1\n");
+        return;
+    }
+
+    g_flight_control.pid_rate_roll.ki  = atof(argv[1]);
+    g_flight_control.pid_rate_pitch.ki = atof(argv[2]);
+    g_flight_control.pid_rate_yaw.ki   = atof(argv[3]);
+
+    char str[64];
+    snprintf(str, sizeof(str), "Rate Ki set: Roll=%.3f, Pitch=%.3f, Yaw=%.3f\n",
+             g_flight_control.pid_rate_roll.ki,
+             g_flight_control.pid_rate_pitch.ki,
+             g_flight_control.pid_rate_yaw.ki);
+    rt_kprintf(str);
+}
+
+// 设置角速度环Kd值
+static void fc_set_rate_kd(int argc, char *argv[])
+{
+    if (argc < 4)
+    {
+        rt_kprintf("Usage: fc_set_rate_kd <roll> <pitch> <yaw>\n");
+        rt_kprintf("  Example: fc_set_rate_kd 0.1 0.1 0.15\n");
+        return;
+    }
+
+    g_flight_control.pid_rate_roll.kd  = atof(argv[1]);
+    g_flight_control.pid_rate_pitch.kd = atof(argv[2]);
+    g_flight_control.pid_rate_yaw.kd   = atof(argv[3]);
+
+    char str[64];
+    snprintf(str, sizeof(str), "Rate Kd set: Roll=%.3f, Pitch=%.3f, Yaw=%.3f\n",
+             g_flight_control.pid_rate_roll.kd,
+             g_flight_control.pid_rate_pitch.kd,
+             g_flight_control.pid_rate_yaw.kd);
+    rt_kprintf(str);
+}
+
+MSH_CMD_EXPORT(fc_set_rate_kp, "set rate PID Kp");
+MSH_CMD_EXPORT(fc_set_rate_limit, "set rate limit");
+MSH_CMD_EXPORT(fc_set_rate_ki, "set rate PID Ki");
+MSH_CMD_EXPORT(fc_set_rate_kd, "set rate PID Kd");

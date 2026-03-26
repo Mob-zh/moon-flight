@@ -47,7 +47,7 @@ bool flight_init(void)
     rx_init();
 
     // DShot600初始化
-    // dshot600_init();
+    dshot600_init();
 
     // IMU初始化（会创建imu_sem和control_sem）
     IMU_init();

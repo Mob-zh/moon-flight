@@ -20,15 +20,15 @@ int main(void)
 
     flight_init();
 
-    while (1)
-    {
-        g_bmp280_baro.read_press(&g_bmp280_baro);
-        g_bmp280_baro.get_altitude(&g_bmp280_baro, 101325);
+//    while (1)
+//    {
+//        // g_bmp280_baro.read_press(&g_bmp280_baro);
+//        // g_bmp280_baro.get_altitude(&g_bmp280_baro, 101325);
 
-        rt_pin_write(LED1_PIN, PIN_LOW);
-        rt_thread_mdelay(speed);
+//        rt_pin_write(LED1_PIN, PIN_LOW);
+//        rt_thread_mdelay(speed);
 
-        rt_pin_write(LED1_PIN, PIN_HIGH);
-        rt_thread_mdelay(speed);
-    }
+//        rt_pin_write(LED1_PIN, PIN_HIGH);
+//        rt_thread_mdelay(speed);
+//    }
 }
