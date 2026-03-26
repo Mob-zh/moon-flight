@@ -20,7 +20,7 @@ static void flight_control_thread_entry(void *parameter);
 #define THROTTLE_MAX 1.0f   // 最大油门
 #define PID_SEND_DIV 2      // PID参数分频（每2次发送一次，即4Hz）
 // 可调的角速度上限
-float rate_limit = 100.0f;
+float rate_limit = 1.0f;
 // ==================== 工具函数 ====================
 
 // PID计算
@@ -94,9 +94,9 @@ void flight_control_init(flight_control_t *fc)
     pid_init(&fc->pid_angle_yaw, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
 
     // 角速度环
-    pid_init(&fc->pid_rate_roll, 0.04f, 0.0f, 0.0f, rate_limit);
-    pid_init(&fc->pid_rate_pitch, -0.04f, 0.0f, 0.0f, rate_limit);
-    pid_init(&fc->pid_rate_yaw, 0.08f, 0.0f, 0.0f, rate_limit);
+    pid_init(&fc->pid_rate_roll, 0.0f, 0.0f, 0.0f, rate_limit);
+    pid_init(&fc->pid_rate_pitch, 0.0f, 0.0f, 0.0f, rate_limit);
+    pid_init(&fc->pid_rate_yaw, 0.01f, 0.0f, 0.0f, rate_limit);
 
     // 位置环
     pid_init(&fc->pid_pos_n, 0.0f, 0.0f, 0.0f, 0.0);
@@ -361,6 +361,8 @@ static void dshot600_send_cmd_5times(uint8_t channel, uint16_t cmd)
 extern uint16_t imu_cnt;
 extern uint16_t pid_cnt;
 
+float yaw_limit = 0.001f;
+
 static void flight_control_thread_entry(void *parameter)
 {
     flight_control_t *fc = &g_flight_control;
@@ -403,6 +405,12 @@ static void flight_control_thread_entry(void *parameter)
             extern FLOAT_ANGLE Att_Angle;
             extern FLOAT_XYZ   Gyr_filt;
             flight_control_set_attitude(fc, Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
+
+            // 弧度小于10度/秒，认为是静止
+            if ((Gyr_filt.Z < yaw_limit) || (Gyr_filt.Z > -yaw_limit))
+            {
+                Gyr_filt.Z = 0;
+            }
             flight_control_set_gyro(fc, Gyr_filt.X * 57.3f, Gyr_filt.Y * 57.3f, Gyr_filt.Z * 57.3f);
 
             // 执行PID控制运算

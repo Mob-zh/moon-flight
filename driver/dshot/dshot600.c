@@ -23,6 +23,8 @@ static uint16_t dshot_dma_buffer[DSHOT_CHANNEL_MAX][DSHOT_BITBANG_DMA_BUFFER_SIZ
 static uint16_t channel_throttle[DSHOT_CHANNEL_MAX]  = {DSHOT_THROTTLE_MIN};
 static uint8_t  channel_telemetry[DSHOT_CHANNEL_MAX] = {0};
 
+uint16_t Test_Throttle = DSHOT_THROTTLE_MAX;
+
 /* Private functions prototypes ---------------------------------------------*/
 // 计算DShot数据包校验和（对12位数据计算4位校验和）
 static uint8_t dshot600_calc_checksum(uint16_t packet)
@@ -188,8 +190,8 @@ void dshot600_send_packet(dshot_channel_e channel, uint16_t value)
     if (channel >= DSHOT_CHANNEL_MAX)
         return;
 
-    if (value > DSHOT_THROTTLE_MAX)
-        value = DSHOT_THROTTLE_MAX;
+    if (value > Test_Throttle)
+        value = Test_Throttle;
 
     // 更新通道状态
     channel_throttle[channel] = value;
