@@ -18,6 +18,7 @@ static void flight_control_thread_entry(void *parameter);
 #define MAX_RATE     100.0f // 最大角速度 (deg/s)
 #define THROTTLE_MIN 0.1f   // 最小油门
 #define THROTTLE_MAX 1.0f   // 最大油门
+#define PID_SEND_DIV 2      // PID参数分频（每2次发送一次，即4Hz）
 // 可调的角速度上限
 float rate_limit = 100.0f;
 // ==================== 工具函数 ====================
@@ -357,10 +358,14 @@ static void dshot600_send_cmd_5times(uint8_t channel, uint16_t cmd)
     }
 }
 
+extern uint16_t imu_cnt;
+extern uint16_t pid_cnt;
+
 static void flight_control_thread_entry(void *parameter)
 {
     flight_control_t *fc = &g_flight_control;
     extern elrsDev_t  g_elrs_receiver;
+    int8_t            imu_cnt = 0;
 
     while (1)
     {
@@ -371,44 +376,53 @@ static void flight_control_thread_entry(void *parameter)
 
         // 执行姿态解算
         IMUupdate(&Gyr_filt, &Acc_filt, &Att_Angle);
+        imu_cnt++;
 
-        // 获取遥控器输入（标准化到 -1 ~ 1）
-        float roll     = g_elrs_receiver.ch1_roll / 1000.0f;
-        float pitch    = g_elrs_receiver.ch2_pitch / 1000.0f;
-        float yaw      = g_elrs_receiver.ch4_yaw / 1000.0f;
-        float throttle = (g_elrs_receiver.ch3_throttle + 1000) / 2000.0f; // 0 ~ 1
-
-        // 设置遥控器输入
-        flight_control_set_rc(fc, roll, pitch, yaw, throttle);
-
-        // 解锁检测
-        if (g_elrs_receiver.ch5_arm > 500)
+        if (imu_cnt == PID_SEND_DIV)
         {
-            flight_control_set_armed(fc, 1);
+
+            // 获取遥控器输入（标准化到 -1 ~ 1）
+            float roll     = g_elrs_receiver.ch1_roll / 1000.0f;
+            float pitch    = g_elrs_receiver.ch2_pitch / 1000.0f;
+            float yaw      = g_elrs_receiver.ch4_yaw / 1000.0f;
+            float throttle = (g_elrs_receiver.ch3_throttle + 1000) / 2000.0f; // 0 ~ 1
+            // 设置遥控器输入
+            flight_control_set_rc(fc, roll, pitch, yaw, throttle);
+
+            // 解锁检测
+            if (g_elrs_receiver.ch5_arm > 500)
+            {
+                flight_control_set_armed(fc, 1);
+            }
+            else
+            {
+                flight_control_set_armed(fc, 0);
+            }
+
+            // 获取当前姿态和角速度
+            extern FLOAT_ANGLE Att_Angle;
+            extern FLOAT_XYZ   Gyr_filt;
+            flight_control_set_attitude(fc, Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
+            flight_control_set_gyro(fc, Gyr_filt.X * 57.3f, Gyr_filt.Y * 57.3f, Gyr_filt.Z * 57.3f);
+
+            // 执行PID控制运算
+            flight_control_update(fc);
+
+            // 获取电机输出并发送到DSHOT
+            float motor[4];
+            flight_control_get_motor(fc, motor);
+
+            dshot600_send_packet(0, motor_to_dshot(motor[3], fc->armed)); // M4
+            dshot600_send_packet(1, motor_to_dshot(motor[2], fc->armed)); // M3
+            dshot600_send_packet(2, motor_to_dshot(motor[1], fc->armed)); // M2
+            dshot600_send_packet(3, motor_to_dshot(motor[0], fc->armed)); // M1
+            imu_cnt = 0;
+
+            // rt_kprintf("2\n");
         }
-        else
-        {
-            flight_control_set_armed(fc, 0);
-        }
+        // rt_kprintf("1\n");
 
-        // 获取当前姿态和角速度
-        extern FLOAT_ANGLE Att_Angle;
-        extern FLOAT_XYZ   Gyr_filt;
-        flight_control_set_attitude(fc, Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
-        flight_control_set_gyro(fc, Gyr_filt.X * 57.3f, Gyr_filt.Y * 57.3f, Gyr_filt.Z * 57.3f);
-
-        // 执行PID控制运算
-        flight_control_update(fc);
-
-        // 获取电机输出并发送到DSHOT
-        float motor[4];
-        flight_control_get_motor(fc, motor);
-
-        dshot600_send_packet(0, motor_to_dshot(motor[3], fc->armed)); // M4
-        dshot600_send_packet(1, motor_to_dshot(motor[2], fc->armed)); // M3
-        dshot600_send_packet(2, motor_to_dshot(motor[1], fc->armed)); // M2
-        dshot600_send_packet(3, motor_to_dshot(motor[0], fc->armed)); // M1
-
+        // 发送测试电调顺序
         // dshot600_send_packet(0, 0x00); // M4
         // dshot600_send_packet(1, 0x01); // M3
         // dshot600_send_packet(2, 0x02); // M2
