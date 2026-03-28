@@ -17,6 +17,8 @@
 elrsDev_t       g_elrs_receiver;
 static rt_sem_t elrs_sem = RT_NULL;
 
+uint8_t rc_valid_threshold = 2;
+
 /************************ 私有函数声明 ************************/
 static rt_err_t elrs_uart_rx_ind(rt_device_t dev, rt_size_t size);
 static void     crsf_process_byte(elrsDev_t *dev, uint8_t ch);
@@ -178,6 +180,11 @@ static void elrs_scale_channels(elrsDev_t *dev)
             (int16_t)(((float)(raw - CRSF_CHANNEL_MID) /
                        (CRSF_CHANNEL_MAX - CRSF_CHANNEL_MID)) *
                       ELRS_CHANNEL_SCALE_MAX);
+
+        if (dev->scaled_channels[ch] > -rc_valid_threshold && dev->scaled_channels[ch] < rc_valid_threshold)
+        {
+            dev->scaled_channels[ch] = 0;
+        }
     }
 
     /* 语义通道映射（按常见 RC 约定：CH1~4 为飞控主通道） */
