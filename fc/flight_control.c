@@ -14,13 +14,17 @@ flight_control_t g_flight_control;
 static void flight_control_thread_entry(void *parameter);
 
 // ==================== 常量 ====================
-#define MAX_ANGLE    45.0f  // Angle模式最大角度 (deg)
-#define MAX_RATE     100.0f // 最大角速度 (deg/s)
-#define THROTTLE_MIN 0.1f   // 最小油门
-#define THROTTLE_MAX 1.0f   // 最大油门
-#define PID_SEND_DIV 2      // PID参数分频（每2次发送一次，即4Hz）
+// #define MAX_ANGLE    45.0f // Angle模式最大角度 (deg)
+#define THROTTLE_MIN 0.1f // 最小油门
+#define THROTTLE_MAX 1.0f // 最大油门
+#define PID_SEND_DIV 2    // PID参数分频（每2次发送一次，即4Hz）
 // 可调的角速度上限
-float rate_limit = 1.0f;
+float   rate_limit_max  = 667.0f;
+float   roll_threshold  = 0.002f;
+float   pitch_threshold = 0.002f;
+float   yaw_threshold   = 0.004f;
+uint8_t MAX_ANGLE       = 45;
+
 // ==================== 工具函数 ====================
 
 // PID计算
@@ -94,9 +98,9 @@ void flight_control_init(flight_control_t *fc)
     pid_init(&fc->pid_angle_yaw, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
 
     // 角速度环
-    pid_init(&fc->pid_rate_roll, 0.0f, 0.0f, 0.0f, rate_limit);
-    pid_init(&fc->pid_rate_pitch, 0.0f, 0.0f, 0.0f, rate_limit);
-    pid_init(&fc->pid_rate_yaw, 0.01f, 0.0f, 0.0f, rate_limit);
+    pid_init(&fc->pid_rate_roll, 0.005f, 0.0f, 0.0f, rate_limit_max);
+    pid_init(&fc->pid_rate_pitch, 0.005f, 0.0f, 0.0f, rate_limit_max);
+    pid_init(&fc->pid_rate_yaw, 0.0000f, 0.00000f, 0.0000000f, rate_limit_max);
 
     // 位置环
     pid_init(&fc->pid_pos_n, 0.0f, 0.0f, 0.0f, 0.0);
@@ -144,9 +148,9 @@ void flight_control_update(flight_control_t *fc)
     {
     case FLIGHT_MODE_ACRO:
         // Acro模式：直接使用遥控器输入作为角速度目标
-        fc->desired_rate_roll  = fc->rc_roll * rate_limit;
-        fc->desired_rate_pitch = fc->rc_pitch * rate_limit;
-        fc->desired_rate_yaw   = fc->rc_yaw * rate_limit;
+        fc->desired_rate_roll  = fc->rc_roll * rate_limit_max;
+        fc->desired_rate_pitch = fc->rc_pitch * rate_limit_max;
+        fc->desired_rate_yaw   = fc->rc_yaw * rate_limit_max;
         break;
 
     case FLIGHT_MODE_ANGLE:
@@ -159,7 +163,7 @@ void flight_control_update(flight_control_t *fc)
         // 角度环PID（目标角度 -> 期望角速度）
         fc->desired_rate_roll  = pid_calculate(&fc->pid_angle_roll, cmd_roll, fc->actual_roll, dt);
         fc->desired_rate_pitch = pid_calculate(&fc->pid_angle_pitch, cmd_pitch, fc->actual_pitch, dt);
-        fc->desired_rate_yaw   = fc->rc_yaw * rate_limit; // Yaw保持Rate模式
+        fc->desired_rate_yaw   = fc->rc_yaw * rate_limit_max; // Yaw保持Rate模式
     }
     break;
     }
@@ -361,8 +365,6 @@ static void dshot600_send_cmd_5times(uint8_t channel, uint16_t cmd)
 extern uint16_t imu_cnt;
 extern uint16_t pid_cnt;
 
-float yaw_limit = 0.001f;
-
 static void flight_control_thread_entry(void *parameter)
 {
     flight_control_t *fc = &g_flight_control;
@@ -406,12 +408,21 @@ static void flight_control_thread_entry(void *parameter)
             extern FLOAT_XYZ   Gyr_filt;
             flight_control_set_attitude(fc, Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
 
-            // 弧度小于10度/秒，认为是静止
-            if ((Gyr_filt.Z < yaw_limit) || (Gyr_filt.Z > -yaw_limit))
+            // 弧度小于limit/秒，认为是静止
+            if ((Gyr_filt.X < pitch_threshold) && (Gyr_filt.X > -pitch_threshold))
+            {
+                Gyr_filt.X = 0;
+            }
+            if ((Gyr_filt.Y < roll_threshold) && (Gyr_filt.Y > -roll_threshold))
+            {
+                Gyr_filt.Y = 0;
+            }
+            if ((Gyr_filt.Z < yaw_threshold) && (Gyr_filt.Z > -yaw_threshold))
             {
                 Gyr_filt.Z = 0;
             }
-            flight_control_set_gyro(fc, Gyr_filt.X * 57.3f, Gyr_filt.Y * 57.3f, Gyr_filt.Z * 57.3f);
+
+            flight_control_set_gyro(fc, Gyr_filt.X * 57.3f, -(Gyr_filt.Y * 57.3f), Gyr_filt.Z * 57.3f);
 
             // 执行PID控制运算
             flight_control_update(fc);
@@ -425,10 +436,7 @@ static void flight_control_thread_entry(void *parameter)
             dshot600_send_packet(2, motor_to_dshot(motor[1], fc->armed)); // M2
             dshot600_send_packet(3, motor_to_dshot(motor[0], fc->armed)); // M1
             imu_cnt = 0;
-
-            // rt_kprintf("2\n");
         }
-        // rt_kprintf("1\n");
 
         // 发送测试电调顺序
         // dshot600_send_packet(0, 0x00); // M4
@@ -575,15 +583,15 @@ static void fc_set_rate_limit(int argc, char *argv[])
     if (argc < 2)
     {
         rt_kprintf("Usage: fc_set_rate_limit <deg/s>\n");
-        rt_kprintf("  Current: %.1f deg/s\n", rate_limit);
+        rt_kprintf("  Current: %.1f deg/s\n", rate_limit_max);
         rt_kprintf("  Example: fc_set_rate_limit 500\n");
         return;
     }
 
-    rate_limit = atof(argv[1]);
+    rate_limit_max = atof(argv[1]);
 
     char str[64];
-    snprintf(str, sizeof(str), "Rate limit set to: %.1f deg/s\n", rate_limit);
+    snprintf(str, sizeof(str), "Rate limit set to: %.1f deg/s\n", rate_limit_max);
     rt_kprintf(str);
 }
 

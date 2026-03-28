@@ -18,7 +18,7 @@ extern accgyroDev_t g_icm_accgyro;   // 惯导设备
 extern elrsDev_t    g_elrs_receiver; // 遥控器接收
 extern FLOAT_XYZ    Gyr_filt;
 extern FLOAT_XYZ    Acc_filt;
-extern float        rate_limit;
+extern float        rate_limit_max;
 // ==================== ANO发送线程 ====================
 static void ano_send_thread_entry(void *parameter)
 {
@@ -45,7 +45,7 @@ static void ano_send_thread_entry(void *parameter)
         ANO_DT_Send_PID_Params(g_flight_control.pid_rate_roll.kp, g_flight_control.pid_rate_pitch.kp, g_flight_control.pid_rate_yaw.kp,
                                g_flight_control.pid_rate_roll.ki, g_flight_control.pid_rate_pitch.ki, g_flight_control.pid_rate_yaw.ki,
                                g_flight_control.pid_rate_roll.kd, g_flight_control.pid_rate_pitch.kd, g_flight_control.pid_rate_yaw.kd,
-                               rate_limit);
+                               rate_limit_max);
 #endif
 
 #if ANO_SEND_GPS
