@@ -135,7 +135,7 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     ezInt *= 0.99f;
 
     // 动态计算Kp（根据角速度调整）
-    float current_Kp = imu_Kp;
+    float current_Kp = IMU_CalcDynamicKp(gx, gy, gz);
 
     // 将误差PI补偿到陀螺仪
     gx = gx + current_Kp * ex + exInt;
