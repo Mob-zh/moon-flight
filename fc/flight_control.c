@@ -24,8 +24,8 @@ static void flight_control_thread_entry(void *parameter);
 #define PID_SEND_DIV 2    // PID参数分频（每2次发送一次，即4Hz）
 // 可调的角速度上限
 float   rate_limit_max  = 360.0f;
-float   roll_threshold  = 0.002f;
-float   pitch_threshold = 0.002f;
+float   roll_threshold  = 0.004f;
+float   pitch_threshold = 0.004f;
 float   yaw_threshold   = 0.004f;
 uint8_t MAX_ANGLE       = 45;
 
