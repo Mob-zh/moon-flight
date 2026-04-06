@@ -11,6 +11,10 @@ rt_sem_t control_sem;
 // 全局飞行控制实例
 flight_control_t g_flight_control;
 
+// 外环分频计数器
+static uint8_t angle_update_cnt = 0; // 姿态环分频（1kHz）
+static uint8_t pos_update_cnt   = 0; // 位置环分频（250Hz）
+
 static void flight_control_thread_entry(void *parameter);
 
 // ==================== 常量 ====================
@@ -19,7 +23,7 @@ static void flight_control_thread_entry(void *parameter);
 #define THROTTLE_MAX 1.0f // 最大油门
 #define PID_SEND_DIV 2    // PID参数分频（每2次发送一次，即4Hz）
 // 可调的角速度上限
-float   rate_limit_max  = 45.0f;
+float   rate_limit_max  = 360.0f;
 float   roll_threshold  = 0.002f;
 float   pitch_threshold = 0.002f;
 float   yaw_threshold   = 0.004f;
@@ -98,8 +102,8 @@ void flight_control_init(flight_control_t *fc)
     pid_init(&fc->pid_angle_yaw, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
 
     // 角速度环
-    pid_init(&fc->pid_rate_roll, 0.008f, 0.0f, 0.0f, rate_limit_max);
-    pid_init(&fc->pid_rate_pitch, 0.008f, 0.0f, 0.0f, rate_limit_max);
+    pid_init(&fc->pid_rate_roll, 0.015f, 0.0f, 0.0f, rate_limit_max);
+    pid_init(&fc->pid_rate_pitch, 0.015f, 0.0f, 0.0f, rate_limit_max);
     pid_init(&fc->pid_rate_yaw, 0.01f, 0.00000f, 0.0000000f, rate_limit_max);
 
     // 位置环
@@ -141,7 +145,21 @@ void flight_control_update(flight_control_t *fc)
         return;
     }
 
-    float dt = 0.000125f; // 8kHz = 0.000125s
+    float dt       = 0.00025f; // 4kHz = 0.00025s
+    float dt_angle = 0.001f;   // 1kHz = 0.001s
+    float dt_pos   = 0.004f;   // 250Hz = 0.004s
+
+    // 姿态环分频：每4次执行1次（1kHz）
+    angle_update_cnt++;
+    if (angle_update_cnt >= 4)
+        angle_update_cnt = 0;
+    bool angle_update = (angle_update_cnt == 0);
+
+    // 位置环分频：每16次执行1次（250Hz）
+    pos_update_cnt++;
+    if (pos_update_cnt >= 16)
+        pos_update_cnt = 0;
+    bool pos_update = (pos_update_cnt == 0);
 
     // 根据模式处理
     switch (fc->mode)
@@ -156,33 +174,33 @@ void flight_control_update(flight_control_t *fc)
     case FLIGHT_MODE_ANGLE:
     case FLIGHT_MODE_HOLD:
     {
-        // 角度限幅
-        // 加负号是为了使角度与遥控器输入方向一致
-        float cmd_roll  = -(constrain(fc->rc_roll, -1.0f, 1.0f) * MAX_ANGLE);
-        float cmd_pitch = -(constrain(fc->rc_pitch, -1.0f, 1.0f) * MAX_ANGLE);
+        // 只有姿态环更新时刻才计算姿态环PID
+        if (angle_update)
+        {
+            // 角度限幅
+            // 加负号是为了使角度与遥控器输入方向一致
+            float cmd_roll  = -(constrain(fc->rc_roll, -1.0f, 1.0f) * MAX_ANGLE);
+            float cmd_pitch = -(constrain(fc->rc_pitch, -1.0f, 1.0f) * MAX_ANGLE);
 
-        // 角度环PID（目标角度 -> 期望角速度）
-        float error_roll  = cmd_roll - fc->actual_roll;
-        float error_pitch = cmd_pitch - fc->actual_pitch;
+            // 角度环PID（目标角度 -> 期望角速度）
+            fc->desired_rate_roll  = pid_calculate(&fc->pid_angle_roll, cmd_roll, fc->actual_roll, dt_angle);
+            fc->desired_rate_pitch = pid_calculate(&fc->pid_angle_pitch, cmd_pitch, fc->actual_pitch, dt_angle);
 
-        fc->desired_rate_roll = pid_calculate(&fc->pid_angle_roll, cmd_roll, fc->actual_roll, dt);
-
-        fc->desired_rate_pitch = pid_calculate(&fc->pid_angle_pitch, cmd_pitch, fc->actual_pitch, dt);
-
-        fc->desired_rate_yaw = fc->rc_yaw * rate_limit_max; // Yaw保持Rate模式
+            fc->desired_rate_yaw = fc->rc_yaw * rate_limit_max; // Yaw保持Rate模式
+        }
     }
     break;
     }
 
-    // GPS Hold模式：添加位置环
-    if (fc->mode == FLIGHT_MODE_HOLD && fc->ekf_ready)
+    // GPS Hold模式：添加位置环（每16次执行1次，250Hz）
+    if (fc->mode == FLIGHT_MODE_HOLD && fc->ekf_ready && pos_update)
     {
         // 位置环PID
         float pos_error_n = fc->desired_pos_n - fc->pos_n;
         float pos_error_e = fc->desired_pos_e - fc->pos_e;
 
-        fc->desired_rate_roll += pid_calculate(&fc->pid_pos_n, 0, pos_error_n, dt);
-        fc->desired_rate_pitch += pid_calculate(&fc->pid_pos_e, 0, pos_error_e, dt);
+        fc->desired_rate_roll += pid_calculate(&fc->pid_pos_n, 0, pos_error_n, dt_pos);
+        fc->desired_rate_pitch += pid_calculate(&fc->pid_pos_e, 0, pos_error_e, dt_pos);
     }
 
     // 角速度环PID（期望角速度 -> 电机混合）
@@ -243,34 +261,9 @@ void flight_control_set_rc(flight_control_t *fc,
 void flight_control_set_attitude(flight_control_t *fc,
                                  float roll, float pitch, float yaw)
 {
-    // 如果当前姿态和目标姿态相差小于0.5°，当前姿态直接等于目标姿态
-    // 加负号是为了使角度与遥控器输入方向一致
-    float cmd_roll  = -(constrain(fc->rc_roll, -1.0f, 1.0f) * MAX_ANGLE);
-    float cmd_pitch = -(constrain(fc->rc_pitch, -1.0f, 1.0f) * MAX_ANGLE);
-
-    // 角度环PID（目标角度 -> 期望角速度）
-    float error_roll  = cmd_roll - fc->actual_roll;
-    float error_pitch = cmd_pitch - fc->actual_pitch;
-
-    if (error_roll > 0.5f || error_roll < -0.5f)
-    {
-        fc->actual_roll = roll;
-    }
-    else
-    {
-        fc->actual_roll = cmd_roll;
-    }
-
-    if (error_pitch > 0.5f || error_pitch < -0.5f)
-    {
-        fc->actual_pitch = pitch;
-    }
-    else
-    {
-        fc->actual_pitch = cmd_pitch;
-    }
-
-    fc->actual_yaw = yaw;
+    fc->actual_roll  = roll;
+    fc->actual_pitch = pitch;
+    fc->actual_yaw   = yaw;
 }
 
 void flight_control_set_gyro(flight_control_t *fc,
@@ -395,8 +388,10 @@ static void dshot600_send_cmd_5times(uint8_t channel, uint16_t cmd)
 
 extern uint16_t imu_cnt;
 extern uint16_t pid_cnt;
-
-static void flight_control_thread_entry(void *parameter)
+// 获取当前姿态和角速度
+extern FLOAT_ANGLE Att_Angle;
+extern FLOAT_XYZ   Gyr_filt;
+static void        flight_control_thread_entry(void *parameter)
 {
     flight_control_t *fc = &g_flight_control;
     extern elrsDev_t  g_elrs_receiver;
@@ -408,7 +403,19 @@ static void flight_control_thread_entry(void *parameter)
 
         // 准备传感器数据
         IMU_Prepare_Data();
-
+        // 弧度小于limit/秒，认为是静止
+        if ((Gyr_filt.X < pitch_threshold) && (Gyr_filt.X > -pitch_threshold))
+        {
+            Gyr_filt.X = 0;
+        }
+        if ((Gyr_filt.Y < roll_threshold) && (Gyr_filt.Y > -roll_threshold))
+        {
+            Gyr_filt.Y = 0;
+        }
+        if ((Gyr_filt.Z < yaw_threshold) && (Gyr_filt.Z > -yaw_threshold))
+        {
+            Gyr_filt.Z = 0;
+        }
         // 执行姿态解算
         IMUupdate(&Gyr_filt, &Acc_filt, &Att_Angle);
         imu_cnt++;
@@ -435,7 +442,6 @@ static void flight_control_thread_entry(void *parameter)
             }
 
             // 模式检测
-
             if (g_elrs_receiver.ch7_mode < -500)
             {
                 // 模式扳机初始位
@@ -452,24 +458,7 @@ static void flight_control_thread_entry(void *parameter)
                 flight_control_set_mode(fc, FLIGHT_MODE_ACRO);
             }
 
-            // 获取当前姿态和角速度
-            extern FLOAT_ANGLE Att_Angle;
-            extern FLOAT_XYZ   Gyr_filt;
             flight_control_set_attitude(fc, Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
-
-            // 弧度小于limit/秒，认为是静止
-            if ((Gyr_filt.X < pitch_threshold) && (Gyr_filt.X > -pitch_threshold))
-            {
-                Gyr_filt.X = 0;
-            }
-            if ((Gyr_filt.Y < roll_threshold) && (Gyr_filt.Y > -roll_threshold))
-            {
-                Gyr_filt.Y = 0;
-            }
-            if ((Gyr_filt.Z < yaw_threshold) && (Gyr_filt.Z > -yaw_threshold))
-            {
-                Gyr_filt.Z = 0;
-            }
 
             // Y是roll,X是pitch,Z是yaw
             flight_control_set_gyro(fc, -(Gyr_filt.Y * 57.3f), Gyr_filt.X * 57.3f, -(Gyr_filt.Z * 57.3f));
