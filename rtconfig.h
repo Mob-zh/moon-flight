@@ -106,7 +106,7 @@
 #define RT_USING_DEVICE
 #define RT_USING_CONSOLE
 #define RT_CONSOLEBUF_SIZE        128
-#define RT_CONSOLE_DEVICE_NAME    "uart3"
+#define RT_CONSOLE_DEVICE_NAME    "uart6"
 #define RT_VER_NUM                0x50201
 #define RT_BACKTRACE_LEVEL_MAX_NR 32
 /* end of RT-Thread Kernel */
@@ -426,6 +426,7 @@
 #define BSP_UART1_RX_USING_DMA
 #define BSP_USING_UART2
 #define BSP_USING_UART3
+#define BSP_USING_UART6
 #define BSP_USING_SPI
 #define BSP_USING_SPI1
 #define BSP_SPI1_TX_USING_DMA
