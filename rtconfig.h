@@ -259,7 +259,7 @@
 
 #define PKG_USING_RT_TUNNEL
 #define TUNNEL_NUM         1
-#define TUNNEL_BUFFER_SIZE 16384
+#define TUNNEL_BUFFER_SIZE 8192
 #define PKG_USING_RT_TUNNEL_V100
 /* end of tools packages */
 
