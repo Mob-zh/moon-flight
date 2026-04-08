@@ -70,14 +70,13 @@ static void bz121_parse_thread_entry(void *parameter)
 
     while (1)
     {
-        // 等待串口数据
-        rt_sem_take(bz121_rx_sem, RT_WAITING_FOREVER);
-
         // 读取所有可用数据
         while (rt_device_read(bz121_uart_dev, 0, &ch, 1) == 1)
         {
             g_bz121_gps.update(&g_bz121_gps, ch);
         }
+        // 使用延时5ms，避免数据积压
+        rt_thread_mdelay(5);
     }
 }
 
@@ -372,7 +371,8 @@ bool bz121_init(gpsDev_t *gps)
     }
 
     // 设置接收回调
-    rt_device_set_rx_indicate(bz121_uart_dev, bz121_uart_rx_ind);
+    // 关闭中断回调，防止线程调度问题导致飞控线程失效
+    // rt_device_set_rx_indicate(bz121_uart_dev, bz121_uart_rx_ind);
 
     // 创建信号量
     bz121_rx_sem = rt_sem_create("bz121_rx", 0, RT_IPC_FLAG_PRIO);
