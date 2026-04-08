@@ -26,6 +26,7 @@
 
 #include "sdcard.h"
 #include "at32f435_437_wk_config.h"
+#include <rtthread.h>
 
 /** @addtogroup AT32F435_periph_examples
  * @{
@@ -77,14 +78,14 @@ sd_error_status_type sd_init(void)
     gpio_init_type       gpio_init_struct = {0};
     uint8_t              retry            = 0;
 
-    /* gpioc and gpioa periph clock enable */
+    /* gpioc and gpiod periph clock enable */
     crm_periph_clock_enable(CRM_GPIOC_PERIPH_CLOCK, TRUE);
     crm_periph_clock_enable(CRM_GPIOA_PERIPH_CLOCK, TRUE);
 
     /* sdio periph clock enable */
     crm_periph_clock_enable(CRM_SDIO2_PERIPH_CLOCK, TRUE);
 
-    /* configure pc.00, pc.01, pc.02, pc.03 pin: d0, d1, d2, d3 */
+    /* configure pc.00, pc.01, pc.02, pc.03 pin: d0, d1, d2, d3*/
     gpio_init_struct.gpio_drive_strength = GPIO_DRIVE_STRENGTH_STRONGER;
     gpio_init_struct.gpio_mode           = GPIO_MODE_MUX;
     gpio_init_struct.gpio_out_type       = GPIO_OUTPUT_PUSH_PULL;
@@ -92,7 +93,7 @@ sd_error_status_type sd_init(void)
     gpio_init_struct.gpio_pull           = GPIO_PULL_NONE;
     gpio_init(GPIOC, &gpio_init_struct);
 
-    /* configure pa.02 clk pin, pa.03 cmd line */
+    /* configure pa.02, pa.03 pin: clk pin, cmd line*/
     gpio_init_struct.gpio_pins = GPIO_PINS_2 | GPIO_PINS_3;
     gpio_init(GPIOA, &gpio_init_struct);
 
@@ -259,7 +260,7 @@ sd_error_status_type sd_power_on(void)
     sdio_power_set(SDIOx, SDIO_POWER_ON);
     /* enable to output sdio_ck */
     sdio_clock_enable(SDIOx, TRUE);
-    wk_delay_ms(10);
+    rt_thread_mdelay(10);
 
     for (retry = 0; retry < 5; retry++)
     {
@@ -319,7 +320,7 @@ sd_error_status_type sd_power_on(void)
         /* send acmd41, check voltage operation range */
         while ((!valid_voltage) && (count < SD_MAX_VOLT_TRIAL))
         {
-            wk_delay_ms(10);
+            rt_thread_mdelay(10);
 
             /* send cmd55 before acmd41 */
             sdio_command_init_struct.argument  = 0x00;
@@ -386,7 +387,7 @@ sd_error_status_type sd_power_on(void)
         /* send cmd1 */
         while ((!valid_voltage) && (count < SD_MAX_VOLT_TRIAL))
         {
-            wk_delay_ms(10);
+            rt_thread_mdelay(10);
 
             sdio_command_init_struct.argument  = SD_VOLTAGE_WINDOW_MMC;
             sdio_command_init_struct.cmd_index = SD_CMD_SEND_OP_COND;
