@@ -92,6 +92,40 @@ typedef struct {
     uint8_t rxFlightChannelsValid; // RC通道有效
 } bb_slow_state_t;
 
+// ==================== 存储操作接口 ====================
+
+/**
+ * @brief Blackbox存储设备操作结构体
+ */
+typedef struct bbStorageOps_s {
+    bool (*init)(void);                      // 初始化存储设备
+    bool (*open)(void);                      // 打开日志
+    void (*close)(void);                     // 关闭日志
+    bool (*write)(const uint8_t *data, uint32_t len); // 写入数据
+    bool (*flush)(void);                     // 刷新缓冲区
+    bool (*is_open)(void);                   // 检查是否正在记录
+    int32_t (*get_log_number)(void);         // 获取日志编号
+} bbStorageOps_t;
+
+/**
+ * @brief Blackbox存储设备实例
+ */
+typedef struct {
+    bbStorageOps_t *ops;         // 操作函数指针
+    bool initialized;            // 初始化标志
+    bool logging;                // 正在记录标志
+    uint32_t log_number;         // 日志编号
+} bbStorage_t;
+
+// 全局存储设备实例
+extern bbStorage_t g_bb_storage;
+
+/**
+ * @brief 注册存储设备
+ * @param ops 存储操作函数集
+ */
+void bb_storage_register(bbStorageOps_t *ops);
+
 // ==================== 函数声明 ====================
 
 /**

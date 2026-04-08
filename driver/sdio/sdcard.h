@@ -51,6 +51,9 @@ extern "C"
 #define SDIOx        SDIO2
 #define DMAMUX_SDIOx DMAMUX_DMAREQ_ID_SDIO2
 
+#define BLOCK_SIZE        512       // SD卡固定块大小
+#define SAFE_START_SECTOR 1890496   // 当前卡的数据区起始扇区
+#define MAX_ALLOW_SECTOR  122016255 // 最大可用扇区
     /**
      * @}
      */
@@ -507,6 +510,12 @@ extern "C"
     sd_error_status_type sd_irq_service(void);
     void                 sd_dma_config(uint32_t *mbuf, uint32_t buf_size, dma_dir_type dir);
 
+    uint8_t              is_sector_safe(uint32_t sector);
+    uint32_t             get_safe_test_sector(void);
+    sd_error_status_type sd_safe_block_write(const uint8_t *buf, uint32_t sector);
+    sd_error_status_type sd_safe_block_read(uint8_t *buf, uint32_t sector);
+    sd_error_status_type sd_safe_multi_write(const uint8_t *buf, uint32_t start_sector, uint32_t count);
+    sd_error_status_type sd_safe_multi_read(uint8_t *buf, uint32_t start_sector, uint32_t count);
     /**
      * @}
      */

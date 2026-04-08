@@ -1,15 +1,16 @@
 /**
  * @file sdcard_test.c
- * @brief SD卡测试程序 - 使用AT32 BSP驱动
+ * @brief SD卡测试程序 - 使用安全读写API
  *        参考官方示例 at32_sdio_test.c
  */
 #include "sdcard.h"
 #include <rtdbg.h>
 #include <rtthread.h>
 #include <stdbool.h>
+#include <string.h>
 
 #define BLOCK_SIZE        512
-#define BLOCKS_NUMBER     64 // 多块测试扇区数
+#define BLOCKS_NUMBER     64      // 多块测试扇区数
 #define MULTI_BUFFER_SIZE (BLOCK_SIZE * BLOCKS_NUMBER)
 
 #define TEST_THREAD_PRIORITY   20
@@ -55,6 +56,9 @@ static int test_init(void)
 
     LOG_I("========== SD Card Init Test ==========");
 
+    // 打印安全扇区范围
+    LOG_I("Safe sector range: %u - %u", SAFE_START_SECTOR, MAX_ALLOW_SECTOR);
+
     sd_error_status_type ret = sd_init();
     if (ret == SD_OK)
     {
@@ -90,15 +94,15 @@ static int test_init(void)
         LOG_I("  Card Block Size: %d", sd_card_info.card_blk_size);
         LOG_I("  RCA: 0x%04X", sd_card_info.rca);
 
-        // 设置为轮询模式（避免DMA问题）
-        ret = sd_device_mode_set(SD_TRANSFER_POLLING_MODE);
+        // 设置为DMA模式
+        ret = sd_device_mode_set(SD_TRANSFER_DMA_MODE);
         if (ret != SD_OK)
         {
-            LOG_E("Failed to set polling mode, error: %d", ret);
+            LOG_E("Failed to set DMA mode, error: %d", ret);
         }
         else
         {
-            LOG_I("  Transfer Mode: Polling");
+            LOG_I("  Transfer Mode: DMA");
         }
 
         test_result.init_ok++;
@@ -124,6 +128,22 @@ static int test_single_block(void)
     sd_error_status_type status = SD_OK;
     uint8_t              bus_width;
 
+    // 获取安全测试扇区
+    uint32_t test_sector = sd_get_safe_test_sector();
+    LOG_I("Using safe test sector: %u", test_sector);
+
+    // 验证扇区安全检查
+    if (!sd_is_sector_safe(test_sector))
+    {
+        LOG_E("Test sector not safe!");
+        return -1;
+    }
+    if (sd_is_sector_safe(0))
+    {
+        LOG_E("Sector 0 should NOT be safe!");
+        return -1;
+    }
+
     // 测试1-bit和4-bit宽度
     for (bus_width = 0; bus_width < 2; bus_width++)
     {
@@ -141,23 +161,23 @@ static int test_single_block(void)
             return -1;
         }
 
-        // 写入512字节到地址0
-        status = sd_block_write(sblock_tbuffer, 0x00, BLOCK_SIZE);
+        // 安全写入512字节
+        status = sd_safe_block_write(sblock_tbuffer, test_sector);
         if (status != SD_OK)
         {
-            LOG_E("  Write failed: %d", status);
+            LOG_E("  Safe write failed: %d", status);
             return -1;
         }
-        LOG_I("  Write OK");
+        LOG_I("  Safe Write OK");
 
-        // 从地址0读取512字节
-        status = sd_block_read(sblock_rbuffer, 0x00, BLOCK_SIZE);
+        // 安全读取512字节
+        status = sd_safe_block_read(sblock_rbuffer, test_sector);
         if (status != SD_OK)
         {
-            LOG_E("  Read failed: %d", status);
+            LOG_E("  Safe read failed: %d", status);
             return -1;
         }
-        LOG_I("  Read OK");
+        LOG_I("  Safe Read OK");
 
         // 比较数据
         if (!buffer_compare(sblock_tbuffer, sblock_rbuffer, BLOCK_SIZE))
@@ -186,6 +206,11 @@ static int test_multiple_blocks(void)
     sd_error_status_type status = SD_OK;
     uint8_t              bus_width;
 
+    // 获取安全测试扇区（从安全区域开始）
+    uint32_t test_sector = sd_get_safe_test_sector() + 100; // 偏移避免覆盖单块测试数据
+
+    LOG_I("Using safe test sector: %u, count: %u", test_sector, BLOCKS_NUMBER);
+
     // 测试1-bit和4-bit宽度
     for (bus_width = 0; bus_width < 2; bus_width++)
     {
@@ -203,23 +228,23 @@ static int test_multiple_blocks(void)
             return -1;
         }
 
-        // 写入多块
-        status = sd_mult_blocks_write(mblock_tbuffer, 512 * 4, BLOCK_SIZE, BLOCKS_NUMBER);
+        // 安全写入多块
+        status = sd_safe_multi_write(mblock_tbuffer, test_sector, BLOCKS_NUMBER);
         if (status != SD_OK)
         {
-            LOG_E("  Write multiple blocks failed: %d", status);
+            LOG_E("  Safe write multiple blocks failed: %d", status);
             return -1;
         }
-        LOG_I("  Write %d blocks OK", BLOCKS_NUMBER);
+        LOG_I("  Safe Write %d blocks OK", BLOCKS_NUMBER);
 
-        // 读取多块
-        status = sd_mult_blocks_read(mblock_rbuffer, 512 * 4, BLOCK_SIZE, BLOCKS_NUMBER);
+        // 安全读取多块
+        status = sd_safe_multi_read(mblock_rbuffer, test_sector, BLOCKS_NUMBER);
         if (status != SD_OK)
         {
-            LOG_E("  Read multiple blocks failed: %d", status);
+            LOG_E("  Safe read multiple blocks failed: %d", status);
             return -1;
         }
-        LOG_I("  Read %d blocks OK", BLOCKS_NUMBER);
+        LOG_I("  Safe Read %d blocks OK", BLOCKS_NUMBER);
 
         // 验证数据
         if (!buffer_compare(mblock_tbuffer, mblock_rbuffer, MULTI_BUFFER_SIZE))
@@ -262,7 +287,7 @@ static void print_result(void)
  */
 static void sdcard_test_thread(void *parameter)
 {
-    LOG_I("Starting SD Card Test (AT32 BSP Driver)...");
+    LOG_I("Starting SD Card Test (Safe Read/Write)...");
 
     // 1. 初始化测试
     if (test_init() != 0)

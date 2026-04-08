@@ -27,7 +27,7 @@
 #include "sdcard.h"
 #include "at32f435_437_wk_config.h"
 #include <rtthread.h>
-
+#include <string.h>
 /** @addtogroup AT32F435_periph_examples
  * @{
  */
@@ -2828,6 +2828,72 @@ void sd_dma_config(uint32_t *mbuf, uint32_t buf_size, dma_dir_type dir)
     dmamux_init(DMA2MUX_CHANNEL4, DMAMUX_SDIOx);
     dmamux_enable(DMA2, TRUE);
     dma_channel_enable(DMA2_CHANNEL4, TRUE);
+}
+
+// FAT32 sd卡操作函数
+
+/**
+ * @brief  检查扇区是否在安全区域
+ * @retval 1=安全, 0=不安全
+ */
+uint8_t sd_is_sector_safe(uint32_t sector)
+{
+    if (sector >= SAFE_START_SECTOR && sector <= MAX_ALLOW_SECTOR)
+        return 1;
+    else
+        return 0;
+}
+
+/**
+ * @brief  获得默认安全测试扇区
+ */
+uint32_t sd_get_safe_test_sector(void)
+{
+    return SAFE_START_SECTOR;
+}
+
+/**
+ * @brief  安全单块写
+ */
+sd_error_status_type sd_safe_block_write(const uint8_t *buf, uint32_t sector)
+{
+    if (!sd_is_sector_safe(sector))
+        return SD_ERROR;
+
+    return sd_block_write((uint8_t *)buf, (long long)sector * BLOCK_SIZE, BLOCK_SIZE);
+}
+
+/**
+ * @brief  安全单块读
+ */
+sd_error_status_type sd_safe_block_read(uint8_t *buf, uint32_t sector)
+{
+    if (!sd_is_sector_safe(sector))
+        return SD_ERROR;
+
+    return sd_block_read(buf, (long long)sector * BLOCK_SIZE, BLOCK_SIZE);
+}
+
+/**
+ * @brief  安全多块写
+ */
+sd_error_status_type sd_safe_multi_write(const uint8_t *buf, uint32_t start_sector, uint32_t count)
+{
+    if (!sd_is_sector_safe(start_sector) || !sd_is_sector_safe(start_sector + count - 1))
+        return SD_ERROR;
+
+    return sd_mult_blocks_write((uint8_t *)buf, (long long)start_sector * BLOCK_SIZE, BLOCK_SIZE, count);
+}
+
+/**
+ * @brief  安全多块读
+ */
+sd_error_status_type sd_safe_multi_read(uint8_t *buf, uint32_t start_sector, uint32_t count)
+{
+    if (!sd_is_sector_safe(start_sector) || !sd_is_sector_safe(start_sector + count - 1))
+        return SD_ERROR;
+
+    return sd_mult_blocks_read(buf, (long long)start_sector * BLOCK_SIZE, BLOCK_SIZE, count);
 }
 
 /**
