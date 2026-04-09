@@ -2,15 +2,26 @@ import os
 import rtconfig
 from building import *
 
-# 获取当前目录
+# 获取 FatFS 源码目录
 cwd = GetCurrentDir()
+src_dir = cwd + '/ff15b/source'
 
-# 收集当前目录下所有 .c 文件
-src = [f for f in os.listdir(cwd) if f.endswith('.c')]
-# 头文件搜索路径仅指定当前目录
-path = [cwd]
+# 收集源码目录下的 C 文件（排除 diskio.c，我们自己提供）
+src = []
+for f in ['ff.c', 'ffsystem.c', 'ffunicode.c']:
+    if os.path.exists(src_dir + '/' + f):
+        src.append(src_dir + '/' + f)
+
+# 添加本地的 diskio.c（对接 SD 卡驱动）
+src.append(cwd + '/ff15b/source/diskio.c')
+
+# 添加测试代码
+src.append(cwd + '/fatfs_test.c')
+
+# 头文件搜索路径
+path = [cwd + '/ff15b/source', 'driver/sdio']
 
 # 定义编译分组
 group = DefineGroup('fatfs', src, depend=[''], CPPPATH=path)
-# 返回分组
+
 Return('group')
