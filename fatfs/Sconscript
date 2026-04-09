@@ -1,0 +1,16 @@
+import os
+import rtconfig
+from building import *
+
+# 获取当前目录
+cwd = GetCurrentDir()
+
+# 收集当前目录下所有 .c 文件
+src = [f for f in os.listdir(cwd) if f.endswith('.c')]
+# 头文件搜索路径仅指定当前目录
+path = [cwd]
+
+# 定义编译分组
+group = DefineGroup('fatfs', src, depend=[''], CPPPATH=path)
+# 返回分组
+Return('group')
