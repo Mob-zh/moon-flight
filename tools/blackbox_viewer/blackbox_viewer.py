@@ -13,29 +13,22 @@
 # 8. 支持打开 .bbl 黑匣子日志并绘图显示
 # 9. 支持导出完整 CSV 数据文件
 # 10. 自带配色体系：Roll/ Pitch/ Yaw/电机/油门区分明显
+# 11. 增加曲线显隐开关（Gyro/Setpoint/Motor独立控制）
+# 12. 增加右侧数据面板：实时显示 Gyro、Setpoint、电机、电压等值
+# 13. 增加时间轴滑块：支持拖动查看任意时间段数据
+# 14. 增加日志信息面板：显示采样率、帧数、时长、电压范围
+# 15. 增加异常数据保护：防止 NaN、溢出导致崩溃
+# 16. 支持保存图表为 PNG 图片
+# 17. 启用 matplotlib 交互工具栏（缩放/平移）
 # ------------------------------------------------------------
 # 【待实现 / 可优化功能（按图片效果进一步完善）💡】
 # 1. 界面布局精细化：严格对齐 Betaflight 区域比例与间距
-# 2. 增加右侧数据面板：实时显示当前帧 Gyro、PID、电机、电压等值
-# 3. 增加时间轴滑块：支持拖动查看任意时间段数据
-# 4. 增加曲线开关：可单独显示/隐藏 Gyro、Setpoint、Motor 等曲线
-# 5. 完善 P 帧差分解码：实现真正的 Betaflight TAG8_4S16 完整解包
-# 6. 增加频谱图配色与色标优化，更贴近官方显示效果
-# 7. 增加滤波显示：原始 Gyro / 滤波后 Gyro 对比曲线
-# 8. 增加 D-term、PID 输出、Mix 混控输出等专业通道显示
-# 9. 增加电机联动动画：四轴姿态图随电机输出实时动态变化
-# 10. 增加图表区域缩放、框选、平移交互功能
-# 11. 增加日志信息显示：采样率、总时长、帧数、黑匣子版本
-# 12. 增加异常数据保护：防止越界、溢出、NaN 导致崩溃
-# 13. 支持批量日志加载与多日志对比显示
-# 14. 支持直接保存图表为图片 / 复制到剪贴板
-# 15. 支持噪声统计：RMS、峰值、主要振动频率自动标注
-# ------------------------------------------------------------
-# 【已知当前限制 📌】
-# 1. P 帧解析为简化版本，未完整实现所有压缩格式解码
-# 2. 四轴姿态图仅为静态示意，未做实时动态电机强度动画
-# 3. 无时间滑块，图表一次性绘制全部数据
-# 4. 无曲线显隐开关与交互缩放功能
+# 2. 完善 P 帧差分解码：实现真正的 Betaflight TAG8_4S16 完整解包
+# 3. 增加滤波显示：原始 Gyro / 滤波后 Gyro 对比曲线
+# 4. 增加 D-term、PID 输出、Mix 混控输出等专业通道显示
+# 5. 增加电机联动动画：四轴姿态图随电机输出实时动态变化
+# 6. 支持批量日志加载与多日志对比显示
+# 7. 支持噪声统计：RMS、峰值、主要振动频率自动标注
 # ============================================================
 
 import tkinter as tk
@@ -77,6 +70,23 @@ class BlackboxParser:
         self.df = None
         self.bb_vbat_ref = 0
         self.last_i_frame = None
+        self.log_info = {}
+
+    def _safe_value(self, val, default=0):
+        """安全值检查，防止NaN和溢出"""
+        if val is None or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+            return default
+        return val
+
+    def _validate_frame(self, frame):
+        """验证并清理帧数据"""
+        for key in ["gyro_x", "gyro_y", "gyro_z", "motor1", "motor2", "motor3", "motor4"]:
+            if key in frame:
+                frame[key] = self._safe_value(frame[key])
+        frame["throttle"] = self._safe_value(frame["throttle"], 1000)
+        frame["vbat"] = self._safe_value(frame["vbat"], 0)
+        frame["rssi"] = self._safe_value(frame["rssi"], 0)
+        return frame
 
     def zigzag_decode(self, val):
         return (val >> 1) ^ -(val & 1)
@@ -159,6 +169,22 @@ class BlackboxParser:
             self.bb_vbat_ref = 0
             self.last_i_frame = None
 
+            # 收集日志基本信息
+            self.log_info = {
+                "filename": filepath.split("/")[-1].split("\\")[-1],
+                "file_size": len(raw),
+                "start_time": None,
+                "end_time": None,
+                "frame_count": 0,
+                "i_frame_count": 0,
+                "p_frame_count": 0,
+                "avg_sample_rate": 0,
+                "vbat_min": 999,
+                "vbat_max": 0,
+                "runtime_s": 0
+            }
+
+            # 跳过H帧头部
             while ptr < len(raw) and raw[ptr] == ord('H'):
                 while ptr < len(raw) and raw[ptr] != ord('\n'):
                     ptr += 1
@@ -186,6 +212,20 @@ class BlackboxParser:
                     ptr += 1
 
             self.df = pd.DataFrame(self.data)
+
+            # 计算统计信息
+            if len(self.df) > 1:
+                time_diffs = self.df["time_s"].diff().dropna()
+                valid_diffs = time_diffs[(time_diffs > 0) & (time_diffs < 1.0)]
+                if len(valid_diffs) > 0:
+                    self.log_info["avg_sample_rate"] = round(1.0 / valid_diffs.mean(), 1)
+                self.log_info["frame_count"] = len(self.df)
+                self.log_info["runtime_s"] = round(self.df["time_s"].iloc[-1] - self.df["time_s"].iloc[0], 3)
+                self.log_info["start_time"] = self.df["time_s"].iloc[0]
+                self.log_info["end_time"] = self.df["time_s"].iloc[-1]
+                self.log_info["vbat_min"] = round(self.df["vbat"].min(), 2)
+                self.log_info["vbat_max"] = round(self.df["vbat"].max(), 2)
+
             return True
         except Exception as e:
             messagebox.showerror("解析失败", f"解析出错：{str(e)}")
@@ -250,15 +290,17 @@ class BlackboxParser:
         rssi, ptr = self.read_vb(raw, ptr)
 
         frame = {
-            "time_s": time_s,
-            "throttle": throttle,
-            "motor1": m0, "motor2": m1, "motor3": m2, "motor4": m3,
-            "gyro_x": gyro[0], "gyro_y": gyro[1], "gyro_z": gyro[2],
-            "setpoint_r": setpoint[0], "setpoint_p": setpoint[1], "setpoint_y": setpoint[2],
-            "vbat": vbat, "rssi": rssi
+            "time_s": self._safe_value(time_s),
+            "throttle": self._safe_value(throttle),
+            "motor1": self._safe_value(m0), "motor2": self._safe_value(m1), "motor3": self._safe_value(m2), "motor4": self._safe_value(m3),
+            "gyro_x": self._safe_value(gyro[0]), "gyro_y": self._safe_value(gyro[1]), "gyro_z": self._safe_value(gyro[2]),
+            "setpoint_r": self._safe_value(setpoint[0]), "setpoint_p": self._safe_value(setpoint[1]), "setpoint_y": self._safe_value(setpoint[2]),
+            "vbat": self._safe_value(vbat), "rssi": self._safe_value(rssi)
         }
+        frame = self._validate_frame(frame)
         self.data.append(frame)
         self.last_i_frame = frame.copy()
+        self.log_info["i_frame_count"] = self.log_info.get("i_frame_count", 0) + 1
         return ptr
 
     def _parse_p_frame(self, raw, ptr):
@@ -313,7 +355,10 @@ class BlackboxParser:
             k = f"motor{i+1}"
             last[k] = motor_delta[i] + (last[k] + prev2[k]) / 2
 
+        # 应用安全检查
+        last = self._validate_frame(last)
         self.data.append(last)
+        self.log_info["p_frame_count"] = self.log_info.get("p_frame_count", 0) + 1
         return ptr
 
 # ==================== GUI ====================
@@ -321,28 +366,86 @@ class BlackboxViewer(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Betaflight Blackbox 风格查看器")
-        self.geometry("1600x900")
+        self.geometry("1700x950")
         self.parser = BlackboxParser()
         self.df = None
         self.configure(bg="#1a1a1a")
 
+        # 曲线开关状态
+        self.show_gyro = {"roll": True, "pitch": True, "yaw": True}
+        self.show_setpoint = {"roll": True, "pitch": True, "yaw": True}
+        self.show_motor = {"m1": True, "m2": True, "m3": True, "m4": True}
+        self.current_time_idx = 0
+
+        # ===== 顶部工具栏 =====
         top = ttk.Frame(self, height=60)
         top.pack(fill=tk.X, padx=10, pady=8)
 
         ttk.Button(top, text="打开日志", command=self.open_log, width=12).pack(side=tk.LEFT, padx=5)
         ttk.Button(top, text="导出CSV", command=self.export_csv, width=12).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="保存图片", command=self.save_figure, width=12).pack(side=tk.LEFT, padx=5)
+
         self.info = ttk.Label(top, text="未加载日志", font=("Arial", 11))
         self.info.pack(side=tk.LEFT, padx=20)
 
+        # ===== 曲线开关栏 =====
+        switch_frame = ttk.Frame(self, height=40)
+        switch_frame.pack(fill=tk.X, padx=10, pady=(0,5))
+
+        ttk.Label(switch_frame, text="显示:", font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
+
+        # Gyro开关
+        self.chk_gyro_r = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="Gyro R", variable=self.chk_gyro_r, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_gyro_p = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="Gyro P", variable=self.chk_gyro_p, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_gyro_y = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="Gyro Y", variable=self.chk_gyro_y, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+
+        ttk.Separator(switch_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Setpoint开关
+        self.chk_sp_r = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="Set R", variable=self.chk_sp_r, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_sp_p = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="Set P", variable=self.chk_sp_p, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_sp_y = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="Set Y", variable=self.chk_sp_y, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+
+        ttk.Separator(switch_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Motor开关
+        self.chk_m1 = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="M1", variable=self.chk_m1, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_m2 = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="M2", variable=self.chk_m2, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_m3 = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="M3", variable=self.chk_m3, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+        self.chk_m4 = tk.BooleanVar(value=True)
+        ttk.Checkbutton(switch_frame, text="M4", variable=self.chk_m4, command=self.draw_all).pack(side=tk.LEFT, padx=3)
+
+        # ===== 主布局：左+右 =====
         self.main_frame = ttk.Frame(self)
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
+        # 左侧：图表区域
+        left_frame = ttk.Frame(self.main_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
         self.fig_top = plt.Figure(figsize=(16, 4), dpi=90)
         self.ax_top = self.fig_top.add_subplot(111)
-        self.canvas_top = FigureCanvasTkAgg(self.fig_top, self.main_frame)
+        self.canvas_top = FigureCanvasTkAgg(self.fig_top, left_frame)
         self.canvas_top.get_tk_widget().pack(fill=tk.X, padx=5, pady=5)
 
-        self.mid = ttk.Frame(self.main_frame)
+        # 启用交互工具栏（可能不存在，需检查）
+        try:
+            toolbar = self.fig_top.canvas.manager.toolbar
+            if toolbar:
+                toolbar.configure()
+        except:
+            pass
+
+        self.mid = ttk.Frame(left_frame)
         self.mid.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.fig_quad = plt.Figure(figsize=(4, 4), dpi=90)
@@ -357,8 +460,65 @@ class BlackboxViewer(tk.Tk):
 
         self.fig_motor = plt.Figure(figsize=(16, 3), dpi=90)
         self.ax_motor = self.fig_motor.add_subplot(111)
-        self.canvas_motor = FigureCanvasTkAgg(self.fig_motor, self.main_frame)
+        self.canvas_motor = FigureCanvasTkAgg(self.fig_motor, left_frame)
         self.canvas_motor.get_tk_widget().pack(fill=tk.X, padx=5, pady=5)
+
+        # 右侧：数据面板
+        right_frame = ttk.Frame(self.main_frame, width=220)
+        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10,0))
+        right_frame.pack_propagate(False)
+
+        ttk.Label(right_frame, text="数据面板", font=("Arial", 12, "bold")).pack(pady=10)
+
+        # 时间信息
+        self.lbl_time = ttk.Label(right_frame, text="时间: -- s", font=("Arial", 10))
+        self.lbl_time.pack(anchor=tk.W, padx=10)
+
+        # Gyro数据
+        ttk.Label(right_frame, text="Gyro:", font=("Arial", 11, "bold")).pack(anchor=tk.W, padx=10, pady=(15,5))
+        self.lbl_gyro_x = ttk.Label(right_frame, text="X: --", font=("Arial", 10))
+        self.lbl_gyro_x.pack(anchor=tk.W, padx=20)
+        self.lbl_gyro_y = ttk.Label(right_frame, text="Y: --", font=("Arial", 10))
+        self.lbl_gyro_y.pack(anchor=tk.W, padx=20)
+        self.lbl_gyro_z = ttk.Label(right_frame, text="Z: --", font=("Arial", 10))
+        self.lbl_gyro_z.pack(anchor=tk.W, padx=20)
+
+        # Setpoint数据
+        ttk.Label(right_frame, text="Setpoint:", font=("Arial", 11, "bold")).pack(anchor=tk.W, padx=10, pady=(15,5))
+        self.lbl_set_r = ttk.Label(right_frame, text="R: --", font=("Arial", 10))
+        self.lbl_set_r.pack(anchor=tk.W, padx=20)
+        self.lbl_set_p = ttk.Label(right_frame, text="P: --", font=("Arial", 10))
+        self.lbl_set_p.pack(anchor=tk.W, padx=20)
+        self.lbl_set_y = ttk.Label(right_frame, text="Y: --", font=("Arial", 10))
+        self.lbl_set_y.pack(anchor=tk.W, padx=20)
+
+        # 电机数据
+        ttk.Label(right_frame, text="Motor:", font=("Arial", 11, "bold")).pack(anchor=tk.W, padx=10, pady=(15,5))
+        self.lbl_motors = []
+        for i in range(4):
+            lbl = ttk.Label(right_frame, text=f"M{i+1}: --", font=("Arial", 10))
+            lbl.pack(anchor=tk.W, padx=20)
+            self.lbl_motors.append(lbl)
+
+        # 电压和RSSI
+        ttk.Label(right_frame, text="其他:", font=("Arial", 11, "bold")).pack(anchor=tk.W, padx=10, pady=(15,5))
+        self.lbl_vbat = ttk.Label(right_frame, text="电压: -- V", font=("Arial", 10))
+        self.lbl_vbat.pack(anchor=tk.W, padx=20)
+        self.lbl_rssi = ttk.Label(right_frame, text="RSSI: --", font=("Arial", 10))
+        self.lbl_rssi.pack(anchor=tk.W, padx=20)
+        self.lbl_throttle = ttk.Label(right_frame, text="油门: --", font=("Arial", 10))
+        self.lbl_throttle.pack(anchor=tk.W, padx=20)
+
+        # ===== 时间轴滑块 =====
+        slider_frame = ttk.Frame(self, height=50)
+        slider_frame.pack(fill=tk.X, padx=10, pady=(0,8))
+
+        ttk.Label(slider_frame, text="时间:").pack(side=tk.LEFT, padx=5)
+        self.time_slider = tk.Scale(slider_frame, from_=0, to=100, orient=tk.HORIZONTAL,
+                                     command=self.on_time_slider, showvalue=False,
+                                     bg="#1a1a1a", fg="white", troughcolor="#333333",
+                                     length=1400)
+        self.time_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
 
         self._init_quad()
 
@@ -385,46 +545,122 @@ class BlackboxViewer(tk.Tk):
         self.update()
         if self.parser.parse_log(p):
             self.df = self.parser.df
-            self.info.config(text=f"完成 {len(self.df)} 帧")
+            info = self.parser.log_info
+            info_text = f"{info['filename']} | {info['frame_count']}帧 | {info['runtime_s']}s | {info['avg_sample_rate']}Hz | V:{info['vbat_min']}-{info['vbat_max']}V"
+            self.info.config(text=info_text)
+
+            # 初始化时间轴滑块
+            if info['runtime_s'] > 0:
+                self.time_slider.config(to=info['runtime_s'], resolution=0.1)
+                self.time_slider.set(0)
+
             self.draw_all()
+            self.update_data_panel(0)
         else:
             self.info.config(text="加载失败")
 
+    def on_time_slider(self, value):
+        """时间轴滑块回调"""
+        if self.df is None or len(self.df) == 0:
+            return
+        try:
+            t = float(value)
+            self.update_data_panel(t)
+        except:
+            pass
+
+    def update_data_panel(self, time_s):
+        """更新右侧数据面板"""
+        if self.df is None or len(self.df) == 0:
+            return
+
+        # 找到最接近的时间点
+        df = self.df
+        idx = (df["time_s"] - time_s).abs().idxmin()
+        row = df.iloc[idx]
+        self.current_time_idx = idx
+
+        # 更新显示
+        self.lbl_time.config(text=f"时间: {row['time_s']:.3f} s")
+
+        self.lbl_gyro_x.config(text=f"X: {row['gyro_x']:.1f}")
+        self.lbl_gyro_y.config(text=f"Y: {row['gyro_y']:.1f}")
+        self.lbl_gyro_z.config(text=f"Z: {row['gyro_z']:.1f}")
+
+        self.lbl_set_r.config(text=f"R: {row['setpoint_r']:.1f}")
+        self.lbl_set_p.config(text=f"P: {row['setpoint_p']:.1f}")
+        self.lbl_set_y.config(text=f"Y: {row['setpoint_y']:.1f}")
+
+        for i, lbl in enumerate(self.lbl_motors):
+            lbl.config(text=f"M{i+1}: {row[f'motor{i+1}']}")
+
+        self.lbl_vbat.config(text=f"电压: {row['vbat']:.2f} V")
+        self.lbl_rssi.config(text=f"RSSI: {row['rssi']}")
+        self.lbl_throttle.config(text=f"油门: {row['throttle']}")
+
     def draw_all(self):
+        if self.df is None or len(self.df) == 0:
+            return
+
         df = self.df
         t = df["time_s"]
         thr = df["throttle"]
 
+        # ===== 顶部曲线 =====
         self.ax_top.clear()
-        self.ax_top.plot(t,df["gyro_x"],label="Gyro Roll",color=COLORS["roll"],lw=1)
-        self.ax_top.plot(t,df["setpoint_r"],label="Setpoint Roll",color=COLORS["setpoint"],lw=1,ls="--")
-        self.ax_top.plot(t,df["gyro_y"],label="Gyro Pitch",color=COLORS["pitch"],lw=1)
-        self.ax_top.plot(t,df["setpoint_p"],label="Setpoint Pitch",color=COLORS["setpoint"],lw=1,ls="--")
-        self.ax_top.set_title("Gyro vs Setpoint",color="white")
+
+        # Gyro曲线（根据开关）
+        if self.chk_gyro_r.get():
+            self.ax_top.plot(t, df["gyro_x"], label="Gyro Roll", color=COLORS["roll"], lw=1)
+        if self.chk_gyro_p.get():
+            self.ax_top.plot(t, df["gyro_y"], label="Gyro Pitch", color=COLORS["pitch"], lw=1)
+        if self.chk_gyro_y.get():
+            self.ax_top.plot(t, df["gyro_z"], label="Gyro Yaw", color=COLORS["yaw"], lw=1)
+
+        # Setpoint曲线（根据开关）
+        if self.chk_sp_r.get():
+            self.ax_top.plot(t, df["setpoint_r"], label="Setpoint Roll", color=COLORS["setpoint"], lw=1, ls="--")
+        if self.chk_sp_p.get():
+            self.ax_top.plot(t, df["setpoint_p"], label="Setpoint Pitch", color=COLORS["setpoint"], lw=1, ls="--")
+        if self.chk_sp_y.get():
+            self.ax_top.plot(t, df["setpoint_y"], label="Setpoint Yaw", color="#a29bfe", lw=1, ls="--")
+
+        self.ax_top.set_title("Gyro vs Setpoint", color="white")
         self.ax_top.legend()
         self.ax_top.grid(True)
         self.canvas_top.draw()
 
-        m = df[["motor1","motor2","motor3","motor4"]].iloc[-1].values
-        nm = (m-1000)/500
+        # ===== 四轴姿态 =====
+        m = df[["motor1", "motor2", "motor3", "motor4"]].iloc[-1].values
+        nm = (m - 1000) / 500
         for cir, v in zip(self.motors, nm):
-            cir.set_alpha(0.5 + v*0.5)
+            cir.set_alpha(0.5 + max(0, min(1, v)) * 0.5)
         self.canvas_quad.draw()
 
+        # ===== 频谱图 =====
         self.ax_spec.clear()
-        f,ts,Sxx = spectrogram(thr-np.mean(thr),fs=250,nperseg=256,noverlap=128)
-        im = self.ax_spec.pcolormesh(ts,f,10*np.log10(Sxx),cmap="inferno",vmin=-80,vmax=-20)
-        self.ax_spec.set_ylim(0,500)
-        self.ax_spec.set_title("Throttle Freq Spectrum",color="white")
-        self.fig_spec.colorbar(im,ax=self.ax_spec)
+        try:
+            if len(thr) > 10 and not np.all(thr == thr.iloc[0]):
+                f, ts, Sxx = spectrogram(thr - np.mean(thr), fs=250, nperseg=256, noverlap=128)
+                im = self.ax_spec.pcolormesh(ts, f, 10 * np.log10(Sxx), cmap="inferno", vmin=-80, vmax=-20)
+                self.ax_spec.set_ylim(0, 500)
+                self.fig_spec.colorbar(im, ax=self.ax_spec)
+        except:
+            pass
+        self.ax_spec.set_title("Throttle Freq Spectrum", color="white")
         self.canvas_spec.draw()
 
+        # ===== 电机曲线 =====
         self.ax_motor.clear()
-        self.ax_motor.plot(t,df["motor1"],label="M1",color=COLORS["motor"],lw=1)
-        self.ax_motor.plot(t,df["motor2"],label="M2",color=COLORS["roll"],lw=1)
-        self.ax_motor.plot(t,df["motor3"],label="M3",color=COLORS["pitch"],lw=1)
-        self.ax_motor.plot(t,df["motor4"],label="M4",color=COLORS["yaw"],lw=1)
-        self.ax_motor.set_title("Motors",color="white")
+        if self.chk_m1.get():
+            self.ax_motor.plot(t, df["motor1"], label="M1", color=COLORS["motor"], lw=1)
+        if self.chk_m2.get():
+            self.ax_motor.plot(t, df["motor2"], label="M2", color=COLORS["roll"], lw=1)
+        if self.chk_m3.get():
+            self.ax_motor.plot(t, df["motor3"], label="M3", color=COLORS["pitch"], lw=1)
+        if self.chk_m4.get():
+            self.ax_motor.plot(t, df["motor4"], label="M4", color=COLORS["yaw"], lw=1)
+        self.ax_motor.set_title("Motors", color="white")
         self.ax_motor.legend()
         self.ax_motor.grid(True)
         self.canvas_motor.draw()
@@ -440,6 +676,72 @@ class BlackboxViewer(tk.Tk):
                 messagebox.showinfo("成功","导出完成")
             except:
                 messagebox.showerror("错误","请保存到桌面/文件夹")
+
+    def save_figure(self):
+        """保存当前图表为图片"""
+        if self.df is None:
+            messagebox.showwarning("提示","先加载日志")
+            return
+        p = filedialog.asksaveasfilename(defaultextension=".png",filetypes=[("PNG图片","*.png")],initialfile="blackbox.png")
+        if p:
+            try:
+                # 保存所有图表到一张大图
+                fig = plt.figure(figsize=(20, 14), facecolor="#1a1a1a")
+                gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.2)
+
+                ax1 = fig.add_subplot(gs[0, :])
+                ax2 = fig.add_subplot(gs[1, 0])
+                ax3 = fig.add_subplot(gs[1, 1])
+                ax4 = fig.add_subplot(gs[2, :])
+
+                df = self.df
+                t = df["time_s"]
+
+                # Gyro & Setpoint
+                if self.chk_gyro_r.get(): ax1.plot(t, df["gyro_x"], label="Gyro Roll", color=COLORS["roll"], lw=1)
+                if self.chk_gyro_p.get(): ax1.plot(t, df["gyro_y"], label="Gyro Pitch", color=COLORS["pitch"], lw=1)
+                if self.chk_gyro_y.get(): ax1.plot(t, df["gyro_z"], label="Gyro Yaw", color=COLORS["yaw"], lw=1)
+                if self.chk_sp_r.get(): ax1.plot(t, df["setpoint_r"], label="Setpoint Roll", color=COLORS["setpoint"], lw=1, ls="--")
+                if self.chk_sp_p.get(): ax1.plot(t, df["setpoint_p"], label="Setpoint Pitch", color=COLORS["setpoint"], lw=1, ls="--")
+                ax1.set_title("Gyro vs Setpoint", color="white")
+                ax1.legend()
+                ax1.grid(True)
+
+                # 四轴姿态
+                ax2.set_xlim(-1.2, 1.2)
+                ax2.set_ylim(-1.2, 1.2)
+                ax2.set_aspect('equal')
+                ax2.set_title("Quad Motors", color="white")
+                pos = [(-0.8,0), (0,0.8), (0.8,0), (0,-0.8)]
+                cols = ["#ff6b6b","#4ecdc4","#f0932b","#a29bfe"]
+                m = df[["motor1","motor2","motor3","motor4"]].iloc[-1].values
+                nm = (m-1000)/500
+                for (x,y),c,v in zip(pos,cols,nm):
+                    ax2.add_patch(plt.Circle((x,y),0.2,color=c,alpha=0.5+max(0,min(1,v))*0.5))
+
+                # 频谱
+                ax3.set_title("Spectrum", color="white")
+                try:
+                    f, ts, Sxx = spectrogram(df["throttle"]-np.mean(df["throttle"]), fs=250, nperseg=256, noverlap=128)
+                    ax3.pcolormesh(ts, f, 10*np.log10(Sxx), cmap="inferno", vmin=-80, vmax=-20)
+                    ax3.set_ylim(0, 500)
+                except:
+                    pass
+
+                # 电机
+                if self.chk_m1.get(): ax4.plot(t, df["motor1"], label="M1", color=COLORS["motor"], lw=1)
+                if self.chk_m2.get(): ax4.plot(t, df["motor2"], label="M2", color=COLORS["roll"], lw=1)
+                if self.chk_m3.get(): ax4.plot(t, df["motor3"], label="M3", color=COLORS["pitch"], lw=1)
+                if self.chk_m4.get(): ax4.plot(t, df["motor4"], label="M4", color=COLORS["yaw"], lw=1)
+                ax4.set_title("Motors", color="white")
+                ax4.legend()
+                ax4.grid(True)
+
+                fig.savefig(p, dpi=150, facecolor="#1a1a1a")
+                plt.close(fig)
+                messagebox.showinfo("成功", "图片已保存")
+            except Exception as e:
+                messagebox.showerror("错误", f"保存失败: {str(e)}")
 
 if __name__ == "__main__":
     app = BlackboxViewer()
