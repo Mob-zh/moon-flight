@@ -18,6 +18,13 @@ float       q0 = 1, q1 = 0, q2 = 0, q3 = 0;  // 四元数元素
 float       exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
 rt_thread_t imu_thread = RT_NULL;
 
+// 初始偏置变量（首次IMU数据有效时自动记录）
+static bool init_bias_recorded = false;
+static float init_acc_bias[3] = {0};
+
+// 加速度计零偏（用于手动校准）
+float acc_offset[3] = {0, 0, 0};
+
 FLOAT_ANGLE Att_Angle = {0};                // 姿态角输出
 FLOAT_XYZ   Acc_filt = {0}, Gyr_filt = {0}; // 滤波后的传感器数据
 
@@ -64,14 +71,15 @@ void IMU_Prepare_Data(void)
     g_icm_accgyro.readGyro(&g_icm_accgyro);
     g_icm_accgyro.readAcc(&g_icm_accgyro);
 
-    // 减去零偏
-    g_icm_accgyro.accData[0] -= g_icm_accgyro.accData_offset[0];
-    g_icm_accgyro.accData[1] -= g_icm_accgyro.accData_offset[1];
-    g_icm_accgyro.accData[2] -= g_icm_accgyro.accData_offset[2];
-
+    // 减去零偏（陀螺仪）
     g_icm_accgyro.gyroData[0] -= g_icm_accgyro.gyroData_offset[0];
     g_icm_accgyro.gyroData[1] -= g_icm_accgyro.gyroData_offset[1];
     g_icm_accgyro.gyroData[2] -= g_icm_accgyro.gyroData_offset[2];
+
+    // 减去加速度计零偏
+    g_icm_accgyro.accData[0] -= (g_icm_accgyro.accData_offset[0] + (int16_t)(acc_offset[0] / g_icm_accgyro.accScale));
+    g_icm_accgyro.accData[1] -= (g_icm_accgyro.accData_offset[1] + (int16_t)(acc_offset[1] / g_icm_accgyro.accScale));
+    g_icm_accgyro.accData[2] -= (g_icm_accgyro.accData_offset[2] + (int16_t)(acc_offset[2] / g_icm_accgyro.accScale));
 
     // 陀螺仪数据处理：LSB → 弧度/秒
     Gyr_filt.X = (float)(g_icm_accgyro.gyroData[0] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
@@ -82,6 +90,17 @@ void IMU_Prepare_Data(void)
     Acc_filt.X = (float)(g_icm_accgyro.accData[0] * g_icm_accgyro.accScale);
     Acc_filt.Y = (float)(g_icm_accgyro.accData[1] * g_icm_accgyro.accScale);
     Acc_filt.Z = (float)(g_icm_accgyro.accData[2] * g_icm_accgyro.accScale);
+
+    // 首次记录初始偏置（用于姿态归零）
+    if (!init_bias_recorded && IMU_USE_INIT_BIAS)
+    {
+        init_acc_bias[0] = Acc_filt.X;
+        init_acc_bias[1] = Acc_filt.Y;
+        init_acc_bias[2] = Acc_filt.Z;
+        init_bias_recorded = true;
+        rt_kprintf("IMU init bias recorded: %.3f, %.3f, %.3f\n",
+                   init_acc_bias[0], init_acc_bias[1], init_acc_bias[2]);
+    }
 }
 
 // ==================== 核心姿态解算算法 ====================
@@ -107,6 +126,14 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     // 检查加速度计数据有效性
     if (ax * ay * az == 0)
         return;
+
+    // 应用初始偏置修正（使姿态归零到设定基准）
+    if (IMU_USE_INIT_BIAS && init_bias_recorded)
+    {
+        ax -= (init_acc_bias[0] - IMU_ACC_INIT_BIAS_X);
+        ay -= (init_acc_bias[1] - IMU_ACC_INIT_BIAS_Y);
+        az -= (init_acc_bias[2] - IMU_ACC_INIT_BIAS_Z);
+    }
 
     // 归一化加速度计数据
     norm = invSqrt(ax * ax + ay * ay + az * az);
@@ -209,6 +236,46 @@ void imu_show_Kp_Ki(void)
     rt_kprintf(str);
 }
 
+// ==================== 手动校准功能 ====================
+void imu_calibrate(int argc, char *argv[])
+{
+    rt_kprintf("Starting accelerometer calibration...\n");
+    rt_kprintf("Please keep the aircraft level and stationary!\n");
+
+    // 采样200次取平均
+    float sum_ax = 0, sum_ay = 0, sum_az = 0;
+    int32_t count = 200;
+
+    for (int i = 0; i < count; i++)
+    {
+        g_icm_accgyro.readAcc(&g_icm_accgyro);
+        sum_ax += (float)g_icm_accgyro.accData[0] * g_icm_accgyro.accScale;
+        sum_ay += (float)g_icm_accgyro.accData[1] * g_icm_accgyro.accScale;
+        sum_az += (float)g_icm_accgyro.accData[2] * g_icm_accgyro.accScale;
+        rt_thread_mdelay(5);
+    }
+
+    // 计算零偏（假设水平放置时Z轴应为1g）
+    acc_offset[0] = sum_ax / count - 0.0f;  // X轴期望为0
+    acc_offset[1] = sum_ay / count - 0.0f;  // Y轴期望为0
+    acc_offset[2] = sum_az / count - 1.0f;  // Z轴期望为1g
+
+    rt_kprintf("Calibration done!\n");
+    rt_kprintf("acc_offset: X=%.4f Y=%.4f Z=%.4f\n",
+               acc_offset[0], acc_offset[1], acc_offset[2]);
+}
+
+void imu_calibrate_show(void)
+{
+    rt_kprintf("Current acc_offset: X=%.4f Y=%.4f Z=%.4f\n",
+               acc_offset[0], acc_offset[1], acc_offset[2]);
+    rt_kprintf("init_acc_bias: X=%.3f Y=%.3f Z=%.3f\n",
+               init_acc_bias[0], init_acc_bias[1], init_acc_bias[2]);
+    rt_kprintf("init_bias_recorded: %d\n", init_bias_recorded);
+}
+
 MSH_CMD_EXPORT(imu_set_Kp, "set imu Kp");
 MSH_CMD_EXPORT(imu_set_Ki, "set imu Ki");
 MSH_CMD_EXPORT(imu_show_Kp_Ki, "show imu Kp and Ki");
+MSH_CMD_EXPORT(imu_calibrate, "calibrate acc offset");
+MSH_CMD_EXPORT(imu_calibrate_show, "show acc offset");

@@ -28,9 +28,9 @@ static void ano_send_thread_entry(void *parameter)
     {
 #if ANO_SEND_EULER
         // 发送欧拉角 (0x03)
-        // ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
+        ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
         // 转弧度为角度再*100
-        ANO_DT_Send_IMU_RawData(0, 0, 0, (int16_t)(Gyr_filt.X * 180 / M_PI * 100), (int16_t)(Gyr_filt.Y * 180 / M_PI * 100), (int16_t)(Gyr_filt.Z * 180 / M_PI * 100), 0);
+        // ANO_DT_Send_IMU_RawData(0, 0, 0, (int16_t)(Gyr_filt.X * 180 / M_PI * 100), (int16_t)(Gyr_filt.Y * 180 / M_PI * 100), (int16_t)(Gyr_filt.Z * 180 / M_PI * 100), 0);
         // rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
 #endif
 
