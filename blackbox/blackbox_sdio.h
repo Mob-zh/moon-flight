@@ -5,12 +5,12 @@
 #ifndef _BLACKBOX_SDIO_H_
 #define _BLACKBOX_SDIO_H_
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // ==================== 配置 ====================
-#define BB_SECTOR_SIZE     512     // SD卡扇区大小
-#define BB_BUFFER_SIZE     2048    // 写入缓冲区大小
+#define BB_SECTOR_SIZE 512  // SD卡扇区大小
+#define BB_BUFFER_SIZE 2048 // 写入缓冲区大小
 
 // ==================== 函数声明 ====================
 
@@ -54,6 +54,6 @@ int32_t bb_sdio_get_log_number(void);
 /**
  * @brief 获取SDIO存储操作函数集
  */
-extern void* bb_sdio_get_ops(void);
+extern void *bb_sdio_get_ops(void);
 
 #endif /* _BLACKBOX_SDIO_H_ */

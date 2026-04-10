@@ -15,16 +15,16 @@
 /* ==================== 私有变量 ==================== */
 
 // 写入缓冲区
-static uint8_t write_buffer[BB_BUFFER_SIZE];
-static uint32_t buffer_pos = 0;
-static uint32_t sector_offset = 0;  // 相对安全区的扇区偏移
-static uint32_t file_size = 0;
+static uint8_t  write_buffer[BB_BUFFER_SIZE];
+static uint32_t buffer_pos    = 0;
+static uint32_t sector_offset = 0; // 相对安全区的扇区偏移
+static uint32_t file_size     = 0;
 
 // 头部预算
-int32_t blackboxHeaderBudget = 0;
+static int32_t blackboxHeaderBudget = 0;
 
 // 获取安全区的起始扇区
-#define BB_SAFE_START_SECTOR  sd_get_safe_test_sector()
+#define BB_SAFE_START_SECTOR sd_get_safe_test_sector()
 
 // ==================== SDIO存储操作实现 ====================
 
@@ -68,8 +68,8 @@ bool bb_sdio_open(void)
     // 记录新的日志
     g_bb_storage.log_number++;
     sector_offset = 0;
-    file_size = 0;
-    buffer_pos = 0;
+    file_size     = 0;
+    buffer_pos    = 0;
 
     // 清空缓冲区
     memset(write_buffer, 0, BB_BUFFER_SIZE);
@@ -114,7 +114,7 @@ bool bb_sdio_write(const uint8_t *data, uint32_t len)
     while (written < len)
     {
         uint32_t remain = len - written;
-        uint32_t space = BB_BUFFER_SIZE - buffer_pos;
+        uint32_t space  = BB_BUFFER_SIZE - buffer_pos;
 
         if (remain >= space)
         {
@@ -217,19 +217,19 @@ int32_t bb_sdio_get_log_number(void)
 
 // SDIO存储操作函数集
 static bbStorageOps_t bb_sdio_ops = {
-    .init = bb_sdio_init,
-    .open = bb_sdio_open,
-    .close = bb_sdio_close,
-    .write = bb_sdio_write,
-    .flush = bb_sdio_flush,
-    .is_open = bb_sdio_is_open,
+    .init           = bb_sdio_init,
+    .open           = bb_sdio_open,
+    .close          = bb_sdio_close,
+    .write          = bb_sdio_write,
+    .flush          = bb_sdio_flush,
+    .is_open        = bb_sdio_is_open,
     .get_log_number = bb_sdio_get_log_number,
 };
 
 /**
  * @brief 获取SDIO存储操作函数集
  */
-void* bb_sdio_get_ops(void)
+void *bb_sdio_get_ops(void)
 {
     return &bb_sdio_ops;
 }

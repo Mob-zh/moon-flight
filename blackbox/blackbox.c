@@ -7,6 +7,7 @@
 #include "blackbox.h"
 #include "blackbox_encode.h"
 #include "blackbox_sdio.h"
+#include "blackbox_fatfs.h"
 #include <rtthread.h>
 #include <string.h>
 
@@ -87,8 +88,8 @@ void bb_init(void)
     memset(&bb_history, 0, sizeof(bb_history));
     memset(&bb_slow_state, 0, sizeof(bb_slow_state));
 
-    // 注册SDIO存储设备
-    bb_storage_register((bbStorageOps_t *)bb_sdio_get_ops());
+    // 注册FatFS存储设备
+    bb_storage_register((bbStorageOps_t *)bb_fatfs_get_ops());
 
     // 初始化存储设备
     if (g_bb_storage.ops && g_bb_storage.ops->init)
@@ -111,6 +112,16 @@ void bb_open(void)
     {
         g_bb_storage.ops->open();
     }
+
+    // 写入头信息
+    bb_write_string("H Product:Blackbox flight data recorder\n");
+    bb_write_string("H Data version:2\n");
+    bb_write_string("H I interval:");
+    bb_write_unsigned_vb(BB_I_INTERVAL);
+    bb_write_string("\n");
+    bb_write_string("H P interval:");
+    bb_write_unsigned_vb(BB_P_INTERVAL);
+    bb_write_string("\n");
 
     // 重置计数器和状态
     bb_iteration     = 0;
