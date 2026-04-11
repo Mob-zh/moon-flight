@@ -97,14 +97,14 @@ void flight_control_init(flight_control_t *fc)
 
     // 初始化PID参数
     // 角度环
-    pid_init(&fc->pid_angle_roll, -8.0f, -0.0f, 0.0f, MAX_ANGLE);
-    pid_init(&fc->pid_angle_pitch, -8.0f, -0.0f, 0.0f, MAX_ANGLE);
+    pid_init(&fc->pid_angle_roll, 8.0f, 0.01f, 0.0f, MAX_ANGLE);
+    pid_init(&fc->pid_angle_pitch, 8.0f, 0.01f, 0.0f, MAX_ANGLE);
     pid_init(&fc->pid_angle_yaw, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
 
     // 角速度环
-    pid_init(&fc->pid_rate_roll, 0.015f, 0.0f, 0.0f, rate_limit_max);
-    pid_init(&fc->pid_rate_pitch, 0.015f, 0.0f, 0.0f, rate_limit_max);
-    pid_init(&fc->pid_rate_yaw, 0.01f, 0.00000f, 0.0000000f, rate_limit_max);
+    pid_init(&fc->pid_rate_roll, 0.0017f, 0.0f, 0.0f, rate_limit_max);
+    pid_init(&fc->pid_rate_pitch, 0.0017f, 0.0f, 0.0f, rate_limit_max);
+    pid_init(&fc->pid_rate_yaw, 0.0025f, 0.00000f, 0.0000000f, rate_limit_max);
 
     // 位置环
     pid_init(&fc->pid_pos_n, 0.0f, 0.0f, 0.0f, 0.0);
@@ -179,8 +179,8 @@ void flight_control_update(flight_control_t *fc)
         {
             // 角度限幅
             // 加负号是为了使角度与遥控器输入方向一致
-            float cmd_roll  = -(constrain(fc->rc_roll, -1.0f, 1.0f) * MAX_ANGLE);
-            float cmd_pitch = -(constrain(fc->rc_pitch, -1.0f, 1.0f) * MAX_ANGLE);
+            float cmd_roll  = constrain(fc->rc_roll, -1.0f, 1.0f) * MAX_ANGLE;
+            float cmd_pitch = constrain(fc->rc_pitch, -1.0f, 1.0f) * MAX_ANGLE;
 
             // 角度环PID（目标角度 -> 期望角速度）
             fc->desired_rate_roll  = pid_calculate(&fc->pid_angle_roll, cmd_roll, fc->actual_roll, dt_angle);
@@ -404,14 +404,6 @@ static void        flight_control_thread_entry(void *parameter)
         // 准备传感器数据
         IMU_Prepare_Data();
         // 弧度小于limit/秒，认为是静止
-        if ((Gyr_filt.X < pitch_threshold) && (Gyr_filt.X > -pitch_threshold))
-        {
-            Gyr_filt.X = 0;
-        }
-        if ((Gyr_filt.Y < roll_threshold) && (Gyr_filt.Y > -roll_threshold))
-        {
-            Gyr_filt.Y = 0;
-        }
         if ((Gyr_filt.Z < yaw_threshold) && (Gyr_filt.Z > -yaw_threshold))
         {
             Gyr_filt.Z = 0;
@@ -431,15 +423,16 @@ static void        flight_control_thread_entry(void *parameter)
             // 设置遥控器输入
             flight_control_set_rc(fc, roll, pitch, yaw, throttle);
 
-            // 解锁检测
-            if (g_elrs_receiver.ch5_arm > 500)
+            // 解锁检测（油门必须在最低位才能解锁，防止误推油门起飞）
+            if (g_elrs_receiver.ch5_arm > 500 && g_elrs_receiver.ch3_throttle <= -950)
             {
                 flight_control_set_armed(fc, 1);
             }
-            else
+            else if (g_elrs_receiver.ch5_arm <= 500)
             {
                 flight_control_set_armed(fc, 0);
             }
+            // 否则保持当前armed状态不变
 
             // 模式检测
             if (g_elrs_receiver.ch7_mode < -500)
