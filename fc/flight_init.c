@@ -56,10 +56,13 @@ bool flight_init(void)
     flight_control_init(&g_flight_control);
 
     // 气压计初始化
-    // baro_init(&g_bmp280_baro);
+    baro_init(&g_bmp280_baro);
 
     // GPS初始化
-    // gps_init(&g_bz121_gps);
+    gps_init(&g_bz121_gps);
+
+    // 位置EKF初始化（初始位置为0，等待GPS数据后再设置）
+    position_ekf_init(&g_position_ekf, 0.0f, 0.0f);
 
     ano_update_init();
 

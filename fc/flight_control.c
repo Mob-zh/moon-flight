@@ -1,15 +1,23 @@
 #include "flight_control.h"
 #include "at32f435_437_wk_config.h"
+#include "bmp280.h"
 #include "dshot600.h"
 #include "elrs.h"
 #include "imu.h"
+#include "position_ekf.h"
 #include <math.h>
 #include <rtthread.h>
 #include <string.h>
 
+// 外部全局变量
+extern baroDev_t      g_bmp280_baro;
+extern position_ekf_t g_position_ekf;
+
 rt_sem_t control_sem;
 // 全局飞行控制实例
 flight_control_t g_flight_control;
+// 全局位置EKF实例
+position_ekf_t g_position_ekf;
 
 // 外环分频计数器
 static uint8_t angle_update_cnt = 0; // 姿态环分频（1kHz）
@@ -109,7 +117,7 @@ void flight_control_init(flight_control_t *fc)
     // 位置环
     pid_init(&fc->pid_pos_n, 0.0f, 0.0f, 0.0f, 0.0);
     pid_init(&fc->pid_pos_e, 0.0f, 0.0f, 0.0f, 0.0);
-    pid_init(&fc->pid_alt, 0.0f, 0.0f, 0.0f, 0.0);
+    pid_init(&fc->pid_alt, 1.0f, 0.0f, 0.0f, 0.3);
 
     // 电机输出初始化
     for (int i = 0; i < 4; i++)
@@ -195,12 +203,19 @@ void flight_control_update(flight_control_t *fc)
     // GPS Hold模式：添加位置环（每16次执行1次，250Hz）
     if (fc->mode == FLIGHT_MODE_HOLD && fc->ekf_ready && pos_update)
     {
-        // 位置环PID
+        // 位置环PID（需要GPS就绪）
         float pos_error_n = fc->desired_pos_n - fc->pos_n;
         float pos_error_e = fc->desired_pos_e - fc->pos_e;
 
         fc->desired_rate_roll += pid_calculate(&fc->pid_pos_n, 0, pos_error_n, dt_pos);
         fc->desired_rate_pitch += pid_calculate(&fc->pid_pos_e, 0, pos_error_e, dt_pos);
+    }
+    // 高度环PID（气压定高）- Hold模式下始终启用，不依赖GPS
+    if (fc->mode == FLIGHT_MODE_HOLD && pos_update)
+    {
+        float alt_error           = fc->desired_alt - fc->pos_alt;
+        float alt_compensation    = pid_calculate(&fc->pid_alt, 0, alt_error, dt_pos);
+        fc->altitude_compensation = alt_compensation;
     }
 
     // 角速度环PID（期望角速度 -> 电机混合）
@@ -210,6 +225,13 @@ void flight_control_update(flight_control_t *fc)
 
     // 电机混合（X型布局）
     float throttle = constrain(fc->rc_throttle, THROTTLE_MIN, THROTTLE_MAX);
+
+    // 叠加高度补偿（Hold模式下）
+    if (fc->mode == FLIGHT_MODE_HOLD)
+    {
+        throttle += fc->altitude_compensation;
+        throttle = constrain(throttle, THROTTLE_MIN, THROTTLE_MAX);
+    }
 
     // X型布局:
     //   FL(0)   FR(1)
@@ -245,6 +267,14 @@ void flight_control_set_mode(flight_control_t *fc, flight_mode_t mode)
         pid_reset(&fc->pid_rate_roll);
         pid_reset(&fc->pid_rate_pitch);
         pid_reset(&fc->pid_rate_yaw);
+        pid_reset(&fc->pid_alt);
+
+        // 进入Hold模式时，记录当前高度作为目标高度
+        if (fc->mode == FLIGHT_MODE_HOLD)
+        {
+            fc->desired_alt           = fc->pos_alt;
+            fc->altitude_compensation = 0.0f;
+        }
     }
 }
 
@@ -280,6 +310,12 @@ void flight_control_set_position(flight_control_t *fc,
     fc->pos_n   = north;
     fc->pos_e   = east;
     fc->pos_alt = alt;
+
+    // 首次获取有效高度时，记录为目标高度
+    if (fc->desired_alt == 0.0f && alt != 0.0f)
+    {
+        fc->desired_alt = alt;
+    }
 }
 
 void flight_control_set_armed(flight_control_t *fc, uint8_t armed)
@@ -443,18 +479,24 @@ static void        flight_control_thread_entry(void *parameter)
             else if (g_elrs_receiver.ch7_mode > 500)
             {
                 // 完全释放
-                flight_control_set_mode(fc, FLIGHT_MODE_ANGLE);
+                flight_control_set_mode(fc, FLIGHT_MODE_HOLD);
             }
             else
             {
                 // 中间位
-                flight_control_set_mode(fc, FLIGHT_MODE_ACRO);
+                flight_control_set_mode(fc, FLIGHT_MODE_ANGLE);
             }
 
             flight_control_set_attitude(fc, Att_Angle.rol, Att_Angle.pit, Att_Angle.yaw);
 
             // Y是roll,X是pitch,Z是yaw
             flight_control_set_gyro(fc, -(Gyr_filt.Y * 57.3f), Gyr_filt.X * 57.3f, -(Gyr_filt.Z * 57.3f));
+
+            // 获取EKF融合后的位置（由position线程更新）
+            float north, east, alt;
+            position_ekf_get_position(&g_position_ekf, &north, &east, &alt);
+            flight_control_set_position(fc, north, east, alt);
+            fc->ekf_ready = position_ekf_ready(&g_position_ekf);
 
             // 执行PID控制运算
             flight_control_update(fc);

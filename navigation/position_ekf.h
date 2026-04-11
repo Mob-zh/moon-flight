@@ -37,6 +37,9 @@ typedef struct {
     uint8_t initialized;   // EKF初始化完成
 } position_ekf_t;
 
+// 全局EKF实例
+extern position_ekf_t g_position_ekf;
+
 // ==================== 函数声明 ====================
 
 /**

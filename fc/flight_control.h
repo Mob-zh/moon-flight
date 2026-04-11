@@ -76,7 +76,10 @@ typedef struct
     // 期望位置（GPS模式）
     float desired_pos_n;
     float desired_pos_e;
-    float desired_alt;
+    float desired_alt;    // 目标高度 (m)
+
+    // 高度补偿（定高用）
+    float altitude_compensation;  // 油门补偿值
 
     // 电机输出 (0-1)
     float motor[4];
