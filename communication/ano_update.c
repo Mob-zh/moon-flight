@@ -31,7 +31,9 @@ static void ano_send_thread_entry(void *parameter)
         ANO_DT_Send_Euler_Angles(Att_Angle.pit, Att_Angle.rol, Att_Angle.yaw);
         // 转弧度为角度再*100
         // ANO_DT_Send_IMU_RawData(0, 0, 0, (int16_t)(Gyr_filt.X * 180 / M_PI * 100), (int16_t)(Gyr_filt.Y * 180 / M_PI * 100), (int16_t)(Gyr_filt.Z * 180 / M_PI * 100), 0);
-        // rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
+#endif
+#if PRINT_EULER
+        rt_kprintf("pit:%d, rol:%d, yaw:%d\n", (int16_t)(Att_Angle.pit * 100), (int16_t)(Att_Angle.rol * 100), (int16_t)(Att_Angle.yaw * 100));
 #endif
 
 #if ANO_SEND_IMU_RAW
@@ -72,14 +74,26 @@ static void ano_send_thread_entry(void *parameter)
             sacc,                            // SACC
             vacc                             // VACC
         );
-        // rt_kprintf("GPS data:LNG=%d, LAT=%d, ALT=%d, N_SPE=%d, E_SPE=%d, D_SPE=%d, PDOP=%d, SACC=%d, VACC=%d\n", gps_data->lon, gps_data->lat, gps_data->alt_msl, gps_data->vel_n, gps_data->vel_e, gps_data->vel_d, pdop, sacc, vacc);
-
+#endif
+#if PRINT_GPS
+        gps_data_t *gps_data = g_bz121_gps.get_data(&g_bz121_gps);
+        // PDOP: 0-20000 -> 0-200
+        uint8_t pdop = (gps_data->hDOP > 20000) ? 200 : (uint8_t)(gps_data->hDOP / 100);
+        // SACC: mm/s -> mm/s/100
+        uint8_t sacc = (gps_data->sAcc > 20000) ? 200 : (uint8_t)(gps_data->sAcc / 100);
+        // VACC: mm -> mm/100
+        uint8_t vacc = (gps_data->vAcc > 20000) ? 200 : (uint8_t)(gps_data->vAcc / 100);
+        rt_kprintf("GPS data:LNG=%d, LAT=%d, ALT=%d, N_SPE=%d, E_SPE=%d, D_SPE=%d, PDOP=%d, SACC=%d, VACC=%d\n", gps_data->lon, gps_data->lat, gps_data->alt_msl, gps_data->vel_n, gps_data->vel_e, gps_data->vel_d, pdop, sacc, vacc);
 #endif
 
 #if ANO_SEND_BARO
         // 发送气压计数据 (0x02)
         ANO_DT_Send_Sensor_Data(0, 0, 0, g_bmp280_baro.altitude,
                                 (int16_t)(g_bmp280_baro.temp / 10), 0, 0);
+
+#endif
+#if PRINT_BARO
+        rt_kprintf("BARO data:ALT=%d, TEMP=%d\n", g_bmp280_baro.altitude, (int16_t)(g_bmp280_baro.temp / 10));
 #endif
 
 #if ANO_SEND_RC
