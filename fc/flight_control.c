@@ -27,9 +27,9 @@ static void flight_control_thread_entry(void *parameter);
 
 // ==================== 常量 ====================
 // #define MAX_ANGLE    45.0f // Angle模式最大角度 (deg)
-#define THROTTLE_MIN 0.1f // 最小油门
-#define THROTTLE_MAX 1.0f // 最大油门
-#define PID_SEND_DIV 2    // PID参数分频（每2次发送一次，即4Hz）
+#define THROTTLE_MIN 0.15f // 最小油门
+#define THROTTLE_MAX 1.0f  // 最大油门
+#define PID_SEND_DIV 2     // PID参数分频（每2次发送一次，即4Hz）
 // 可调的角速度上限
 float   rate_limit_max  = 360.0f;
 float   roll_threshold  = 0.004f;
@@ -105,8 +105,8 @@ void flight_control_init(flight_control_t *fc)
 
     // 初始化PID参数
     // 角度环
-    pid_init(&fc->pid_angle_roll, 8.0f, 0.01f, 0.0f, MAX_ANGLE);
-    pid_init(&fc->pid_angle_pitch, 8.0f, 0.01f, 0.0f, MAX_ANGLE);
+    pid_init(&fc->pid_angle_roll, 14.0f, 0.005f, 0.01f, MAX_ANGLE);
+    pid_init(&fc->pid_angle_pitch, 14.0f, 0.005f, 0.01f, MAX_ANGLE);
     pid_init(&fc->pid_angle_yaw, 0.00f, 0.0f, 0.0f, MAX_ANGLE);
 
     // 角速度环
