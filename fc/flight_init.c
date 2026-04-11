@@ -1,10 +1,11 @@
 #include "flight_init.h"
 #include "bz121.h"
+#include "bmp280.h"
 #include "dshot600.h"
 #include "elrs.h"
 #include "flight_control.h"
 #include "imu.h"
-#include "position_ekf.h"
+#include "position_init.h"
 
 extern int ano_update_init(void);
 
@@ -55,14 +56,8 @@ bool flight_init(void)
     // 飞行控制初始化（创建控制线程，等待control_sem）
     flight_control_init(&g_flight_control);
 
-    // 气压计初始化
-    baro_init(&g_bmp280_baro);
-
-    // GPS初始化
-    gps_init(&g_bz121_gps);
-
-    // 位置EKF初始化（初始位置为0，等待GPS数据后再设置）
-    position_ekf_init(&g_position_ekf, 0.0f, 0.0f);
+    // 位置传感器初始化（气压计 + GPS + EKF + 读取线程）
+    position_sensor_init();
 
     ano_update_init();
 

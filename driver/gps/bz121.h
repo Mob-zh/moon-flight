@@ -103,4 +103,10 @@ extern gpsDev_t g_bz121_gps;
  */
 bool gps_init(gpsDev_t *gps);
 
+/**
+ * @brief 获取GPS UART设备句柄
+ * @retval UART设备指针
+ */
+rt_device_t bz121_get_uart_dev(void);
+
 #endif /* _GPS_H_ */

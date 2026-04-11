@@ -54,31 +54,14 @@ static void     parse_nav_pvt(gps_data_t *data, uint8_t *payload);
 static bool     bz121_check_timeout(gpsDev_t *gps);
 
 // ==================== 串口接收回调 ====================
-static rt_err_t bz121_uart_rx_ind(rt_device_t dev, rt_size_t size)
-{
-    if (bz121_rx_sem && size)
-    {
-        rt_sem_release(bz121_rx_sem);
-    }
-    return RT_EOK;
-}
-
-// ==================== GPS数据解析线程 ====================
-static void bz121_parse_thread_entry(void *parameter)
-{
-    uint8_t ch;
-
-    while (1)
-    {
-        // 读取所有可用数据
-        while (rt_device_read(bz121_uart_dev, 0, &ch, 1) == 1)
-        {
-            g_bz121_gps.update(&g_bz121_gps, ch);
-        }
-        // 使用延时5ms，避免数据积压
-        rt_thread_mdelay(5);
-    }
-}
+// static rt_err_t bz121_uart_rx_ind(rt_device_t dev, rt_size_t size)
+// {
+//     if (bz121_rx_sem && size)
+//     {
+//         rt_sem_release(bz121_rx_sem);
+//     }
+//     return RT_EOK;
+// }
 
 // ==================== NAV-PVT 解析 ====================
 // UBX NAV-PVT (0x01 0x07) payload结构 (小端序, 92字节):
@@ -375,27 +358,27 @@ bool bz121_init(gpsDev_t *gps)
     // rt_device_set_rx_indicate(bz121_uart_dev, bz121_uart_rx_ind);
 
     // 创建信号量
-    bz121_rx_sem = rt_sem_create("bz121_rx", 0, RT_IPC_FLAG_PRIO);
-    if (bz121_rx_sem == RT_NULL)
-    {
-        rt_kprintf("[BZ121] Error: create semaphore failed!\n");
-        return false;
-    }
+    // bz121_rx_sem = rt_sem_create("bz121_rx", 0, RT_IPC_FLAG_PRIO);
+    // if (bz121_rx_sem == RT_NULL)
+    // {
+    //     rt_kprintf("[BZ121] Error: create semaphore failed!\n");
+    //     return false;
+    // }
 
     // 配置GPS输出UBX NAV-PVT消息
     gps_configure();
 
-    // 创建解析线程
-    bz121_parse_thread = rt_thread_create("bz121_parse",
-                                          bz121_parse_thread_entry,
-                                          RT_NULL,
-                                          2048,
-                                          15,
-                                          10);
-    if (bz121_parse_thread != RT_NULL)
-    {
-        rt_thread_startup(bz121_parse_thread);
-    }
+    // // 创建解析线程
+    // bz121_parse_thread = rt_thread_create("bz121_parse",
+    //                                       bz121_parse_thread_entry,
+    //                                       RT_NULL,
+    //                                       2048,
+    //                                       15,
+    //                                       10);
+    // if (bz121_parse_thread != RT_NULL)
+    // {
+    //     rt_thread_startup(bz121_parse_thread);
+    // }
 
     rt_kprintf("[BZ121] GPS driver initialized on %s, baud=%d\n",
                BZ121_UART_DEVICE_NAME, BZ121_UART_BAUDRATE);
@@ -409,4 +392,9 @@ bool gps_init(gpsDev_t *gps)
     gps->init = bz121_init;
 
     return gps->init(gps);
+}
+
+rt_device_t bz121_get_uart_dev(void)
+{
+    return bz121_uart_dev;
 }
