@@ -8,9 +8,9 @@
 // ==================== 数据发送开关 ====================
 #define ANO_SEND_EULER   1 // 发送欧拉角 (0x03)
 #define ANO_SEND_IMU_RAW 0 // 发送IMU原始数据 (0x01)
-#define ANO_SEND_GPS     0 // 发送GPS数据 (0x30)
-#define ANO_SEND_BARO    0 // 发送气压计数据 (0x02)
-#define ANO_SEND_RC      1 // 发送遥控器数据 (0x40)
+#define ANO_SEND_GPS     1 // 发送GPS数据 (0x30)
+#define ANO_SEND_BARO    1 // 发送气压计数据 (0x02)
+#define ANO_SEND_RC      0 // 发送遥控器数据 (0x40)
 #define ANO_SEND_PID     0 // 发送PID参数 (0xF1)
 
 // PID参数发送函数
