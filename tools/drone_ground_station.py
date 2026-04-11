@@ -62,6 +62,21 @@ class DroneGroundStation:
             'mag_sta': 0          # 罗盘状态
         }
 
+        # GPS数据
+        self.gps_data = {
+            'fix_sta': 0,          # 定位状态 (0=无定位, 1=2D, 2=3D)
+            's_num': 0,            # 卫星数量
+            'lng': 0,             # 经度 (deg * 1e7)
+            'lat': 0,             # 纬度 (deg * 1e7)
+            'alt_gps': 0,          # GPS高度 (mm)
+            'n_spe': 0,           # 北向速度 (cm/s)
+            'e_spe': 0,           # 东向速度 (cm/s)
+            'd_spe': 0,           # 下向速度 (cm/s)
+            'pdop': 0,            # 定位精度
+            'sacc': 0,           # 速度精度 (mm/s)
+            'vacc': 0              # 高度精度 (mm)
+        }
+
         # 数据记录
         self.data_log = []
         self.is_recording = False
@@ -246,6 +261,34 @@ class DroneGroundStation:
         ttk.Label(baro_frame, text="温度:").grid(row=1, column=0, padx=5, pady=4, sticky='e')
         self.temp_label = ttk.Label(baro_frame, text="0.0 °C", font=('Courier New', 11, 'bold'))
         self.temp_label.grid(row=1, column=1, padx=5, pady=4, sticky='w')
+
+        # GPS数据
+        gps_frame = ttk.LabelFrame(left_frame, text="GPS定位")
+        gps_frame.pack(fill=tk.X, pady=(0, 10), ipady=5)
+
+        ttk.Label(gps_frame, text="状态:").grid(row=0, column=0, padx=5, pady=4, sticky='e')
+        self.gps_fix_label = ttk.Label(gps_frame, text="无定位", font=('Courier New', 11, 'bold'))
+        self.gps_fix_label.grid(row=0, column=1, padx=5, pady=4, sticky='w')
+
+        ttk.Label(gps_frame, text="卫星:").grid(row=1, column=0, padx=5, pady=4, sticky='e')
+        self.gps_snum_label = ttk.Label(gps_frame, text="0", font=('Courier New', 11))
+        self.gps_snum_label.grid(row=1, column=1, padx=5, pady=4, sticky='w')
+
+        ttk.Label(gps_frame, text="纬度:").grid(row=2, column=0, padx=5, pady=4, sticky='e')
+        self.gps_lat_label = ttk.Label(gps_frame, text="0.000000 °", font=('Courier New', 10))
+        self.gps_lat_label.grid(row=2, column=1, padx=5, pady=4, sticky='w')
+
+        ttk.Label(gps_frame, text="经度:").grid(row=3, column=0, padx=5, pady=4, sticky='e')
+        self.gps_lng_label = ttk.Label(gps_frame, text="0.000000 °", font=('Courier New', 10))
+        self.gps_lng_label.grid(row=3, column=1, padx=5, pady=4, sticky='w')
+
+        ttk.Label(gps_frame, text="高度:").grid(row=4, column=0, padx=5, pady=4, sticky='e')
+        self.gps_alt_label = ttk.Label(gps_frame, text="0.0 m", font=('Courier New', 11))
+        self.gps_alt_label.grid(row=4, column=1, padx=5, pady=4, sticky='w')
+
+        ttk.Label(gps_frame, text="速度:").grid(row=5, column=0, padx=5, pady=4, sticky='e')
+        self.gps_spd_label = ttk.Label(gps_frame, text="N:0 E:0 D:0 cm/s", font=('Courier New', 10))
+        self.gps_spd_label.grid(row=5, column=1, padx=5, pady=4, sticky='w')
 
         # 遥杆位置可视化（两个摇杆平行放置）
         stick_frame = ttk.LabelFrame(left_frame, text="遥杆位置")
@@ -1032,6 +1075,34 @@ class DroneGroundStation:
                 self.rc_channels[12] = aux9
                 self.rc_channels[13] = aux10
 
+            # 功能码0x30：GPS数据
+            elif func_code == 0x30 and data_len == 0x17:
+                # fix_sta(1) + s_num(1) + lng(4) + lat(4) + alt_gps(4) + n_spe(2) + e_spe(2) + d_spe(2) + pdop(1) + sacc(1) + vacc(1) = 23字节
+                fix_sta = frame[4]   # 定位状态
+                s_num = frame[5]    # 卫星数量
+                lng = struct.unpack('<i', frame[6:10])[0]   # 经度 (deg * 1e7)
+                lat = struct.unpack('<i', frame[10:14])[0]   # 纬度 (deg * 1e7)
+                alt_gps = struct.unpack('<i', frame[14:18])[0]  # GPS高度 (mm)
+                n_spe = struct.unpack('<h', frame[18:20])[0]  # 北向速度 (cm/s)
+                e_spe = struct.unpack('<h', frame[20:22])[0]  # 东向速度 (cm/s)
+                d_spe = struct.unpack('<h', frame[22:24])[0]  # 下向速度 (cm/s)
+                pdop = frame[24]    # 定位精度
+                sacc = frame[25]    # 速度精度 (mm/s)
+                vacc = frame[26]    # 高度精度 (mm)
+
+                # 更新GPS数据
+                self.gps_data['fix_sta'] = fix_sta
+                self.gps_data['s_num'] = s_num
+                self.gps_data['lng'] = lng
+                self.gps_data['lat'] = lat
+                self.gps_data['alt_gps'] = alt_gps
+                self.gps_data['n_spe'] = n_spe
+                self.gps_data['e_spe'] = e_spe
+                self.gps_data['d_spe'] = d_spe
+                self.gps_data['pdop'] = pdop
+                self.gps_data['sacc'] = sacc
+                self.gps_data['vacc'] = vacc
+
             # 功能码0xF1：PID参数（角速度环）
             elif func_code == 0xF1 and data_len == 0x14:
                 # 解析22字节数据：Kp(Roll,Pitch,Yaw), Ki(3), Kd(3), limit
@@ -1556,6 +1627,25 @@ class DroneGroundStation:
                 # 更新气压计和温度数据
                 self.alt_label.config(text=f"{self.sensor_data['alt_bar']} cm")
                 self.temp_label.config(text=f"{self.sensor_data['temp']:.1f} °C")
+
+                # 更新GPS数据
+                fix_sta = self.gps_data['fix_sta']
+                fix_text = {0: "无定位", 1: "2D定位", 2: "3D定位"}.get(fix_sta, "未知")
+                self.gps_fix_label.config(text=fix_text)
+                self.gps_snum_label.config(text=str(self.gps_data['s_num']))
+                # 经纬度: 1e-7度转换为度
+                lat_deg = self.gps_data['lat'] / 1e7
+                lng_deg = self.gps_data['lng'] / 1e7
+                self.gps_lat_label.config(text=f"{lat_deg:.6f} °")
+                self.gps_lng_label.config(text=f"{lng_deg:.6f} °")
+                # GPS高度: mm转m
+                alt_m = self.gps_data['alt_gps'] / 1000.0
+                self.gps_alt_label.config(text=f"{alt_m:.1f} m")
+                # 速度: cm/s
+                n_spe = self.gps_data['n_spe']
+                e_spe = self.gps_data['e_spe']
+                d_spe = self.gps_data['d_spe']
+                self.gps_spd_label.config(text=f"N:{n_spe} E:{e_spe} D:{d_spe} cm/s")
 
                 # 更新遥杆位置可视化（通道值范围 -1000 ~ 1000）
                 if len(self.rc_channels) >= 4:
