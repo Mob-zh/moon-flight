@@ -10,6 +10,28 @@
 #define halfT    0.0000625f // 采样周期的一半 (对应8kHz)
 #define RadtoDeg 57.3f      // 弧度转角度系数
 
+// ==================== PT1一阶低通滤波 ====================
+// 截止频率100Hz，采样率8kHz
+// alpha = 1 / (1 + tau*fs), tau = 1/(2*PI*100) ≈ 0.00159
+// alpha = 1 / (1 + 0.00159*8000) ≈ 0.0596
+#define PT1_CUTOFF 100.0f
+#define PT1_ALPHA  0.0596f
+
+typedef struct
+{
+    float out;
+} pt1_filter_t;
+
+static pt1_filter_t gyro_pt1_x = {0};
+static pt1_filter_t gyro_pt1_y = {0};
+static pt1_filter_t gyro_pt1_z = {0};
+
+static float pt1_filter(pt1_filter_t *f, float in)
+{
+    f->out = PT1_ALPHA * in + (1.0f - PT1_ALPHA) * f->out;
+    return f->out;
+}
+
 // ==================== 全局变量 ====================
 rt_sem_t    imu_sem = RT_NULL;               // IMU信号量（定时器中断→IMU线程）
 float       imu_Kp  = 2.0f;                  // 比例增益 0.5 - 2.0 (动态调整)
@@ -19,8 +41,8 @@ float       exInt = 0, eyInt = 0, ezInt = 0; // 积分误差
 rt_thread_t imu_thread = RT_NULL;
 
 // 初始偏置变量（首次IMU数据有效时自动记录）
-static bool init_bias_recorded = false;
-static float init_acc_bias[3] = {0};
+static bool  init_bias_recorded = false;
+static float init_acc_bias[3]   = {0};
 
 // 加速度计零偏（用于手动校准）
 float acc_offset[3] = {0, 0, 0};
@@ -81,10 +103,19 @@ void IMU_Prepare_Data(void)
     g_icm_accgyro.accData[1] -= (g_icm_accgyro.accData_offset[1] + (int16_t)(acc_offset[1] / g_icm_accgyro.accScale));
     g_icm_accgyro.accData[2] -= (g_icm_accgyro.accData_offset[2] + (int16_t)(acc_offset[2] / g_icm_accgyro.accScale));
 
-    // 陀螺仪数据处理：LSB → 弧度/秒
     Gyr_filt.X = (float)(g_icm_accgyro.gyroData[0] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
     Gyr_filt.Y = (float)(g_icm_accgyro.gyroData[1] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
     Gyr_filt.Z = (float)(g_icm_accgyro.gyroData[2] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
+
+    // PT1一阶低通滤波（滤除高频震动）
+    Gyr_filt.X = pt1_filter(&gyro_pt1_x, Gyr_filt.X);
+    Gyr_filt.Y = pt1_filter(&gyro_pt1_y, Gyr_filt.Y);
+    Gyr_filt.Z = pt1_filter(&gyro_pt1_z, Gyr_filt.Z);
+
+    // // 陀螺仪数据处理：LSB → 弧度/秒
+    // float gx = (float)(g_icm_accgyro.gyroData[0] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
+    // float gy = (float)(g_icm_accgyro.gyroData[1] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
+    // float gz = (float)(g_icm_accgyro.gyroData[2] * g_icm_accgyro.gyroScale * M_PI / 180.0f);
 
     // 加速度计数据处理：LSB → g
     Acc_filt.X = (float)(g_icm_accgyro.accData[0] * g_icm_accgyro.accScale);
@@ -94,9 +125,9 @@ void IMU_Prepare_Data(void)
     // 首次记录初始偏置（用于姿态归零）
     if (!init_bias_recorded && IMU_USE_INIT_BIAS)
     {
-        init_acc_bias[0] = Acc_filt.X;
-        init_acc_bias[1] = Acc_filt.Y;
-        init_acc_bias[2] = Acc_filt.Z;
+        init_acc_bias[0]   = Acc_filt.X;
+        init_acc_bias[1]   = Acc_filt.Y;
+        init_acc_bias[2]   = Acc_filt.Z;
         init_bias_recorded = true;
         rt_kprintf("IMU init bias recorded: %.3f, %.3f, %.3f\n",
                    init_acc_bias[0], init_acc_bias[1], init_acc_bias[2]);
@@ -204,10 +235,10 @@ void IMUupdate(FLOAT_XYZ *Gyr_filt, FLOAT_XYZ *Acc_filt, FLOAT_ANGLE *Att_Angle)
     }
 
     // 横滚角ROLL
-    Att_Angle->rol = -asin(2.0f * (q1 * q3 - q0 * q2)) * RadtoDeg;
+    Att_Angle->rol = asin(2.0f * (q1 * q3 - q0 * q2)) * RadtoDeg;
 
     // 俯仰角PITCH
-    Att_Angle->pit = -atan2(2.0f * q2 * q3 + 2.0f * q0 * q1, q0q0 - q1q1 - q2q2 + q3q3) * RadtoDeg;
+    Att_Angle->pit = atan2(2.0f * q2 * q3 + 2.0f * q0 * q1, q0q0 - q1q1 - q2q2 + q3q3) * RadtoDeg;
 }
 
 // ==================== IMU初始化函数 ====================
@@ -243,7 +274,7 @@ void imu_calibrate(int argc, char *argv[])
     rt_kprintf("Please keep the aircraft level and stationary!\n");
 
     // 采样200次取平均
-    float sum_ax = 0, sum_ay = 0, sum_az = 0;
+    float   sum_ax = 0, sum_ay = 0, sum_az = 0;
     int32_t count = 200;
 
     for (int i = 0; i < count; i++)
@@ -256,9 +287,9 @@ void imu_calibrate(int argc, char *argv[])
     }
 
     // 计算零偏（假设水平放置时Z轴应为1g）
-    acc_offset[0] = sum_ax / count - 0.0f;  // X轴期望为0
-    acc_offset[1] = sum_ay / count - 0.0f;  // Y轴期望为0
-    acc_offset[2] = sum_az / count - 1.0f;  // Z轴期望为1g
+    acc_offset[0] = sum_ax / count - 0.0f; // X轴期望为0
+    acc_offset[1] = sum_ay / count - 0.0f; // Y轴期望为0
+    acc_offset[2] = sum_az / count - 1.0f; // Z轴期望为1g
 
     rt_kprintf("Calibration done!\n");
     rt_kprintf("acc_offset: X=%.4f Y=%.4f Z=%.4f\n",
